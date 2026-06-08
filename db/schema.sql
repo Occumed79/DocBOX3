@@ -1,7 +1,6 @@
 -- Source Vault schema
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS vector;  -- for semantic search (optional, graceful fallback)
 
 CREATE TABLE IF NOT EXISTS sv_folders (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -30,15 +29,9 @@ CREATE TABLE IF NOT EXISTS sv_files (
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Full-text search index
-CREATE INDEX IF NOT EXISTS sv_files_fts ON sv_files
-  USING gin(to_tsvector('english',
-    coalesce(name,'') || ' ' ||
-    coalesce(original_name,'') || ' ' ||
-    coalesce(extracted_text,'') || ' ' ||
-    coalesce(notes,'') || ' ' ||
-    array_to_string(tags, ' ')
-  ));
-
-CREATE INDEX IF NOT EXISTS sv_files_folder ON sv_files(folder_id);
-CREATE INDEX IF NOT EXISTS sv_folders_parent ON sv_folders(parent_id);
+-- Separate trigram / B-tree indexes instead of a GIN expression index
+-- (expression indexes with user-defined functions require IMMUTABLE on Neon)
+CREATE INDEX IF NOT EXISTS sv_files_folder    ON sv_files(folder_id);
+CREATE INDEX IF NOT EXISTS sv_folders_parent  ON sv_folders(parent_id);
+CREATE INDEX IF NOT EXISTS sv_files_archived  ON sv_files(is_archived);
+CREATE INDEX IF NOT EXISTS sv_files_upload    ON sv_files(upload_date DESC);
