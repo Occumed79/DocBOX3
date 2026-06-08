@@ -26,18 +26,19 @@ export default function SearchBar({ onResults, onClear }: Props) {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!q.trim()) { onClear(); return; }
-    debounceRef.current = setTimeout(() => search(q), 420);
+    debounceRef.current = setTimeout(() => search(q), 380);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [q, search, onClear]);
 
   return (
-    <div className="relative flex items-center gap-3">
+    <div className="search-hero flex items-center gap-3 px-5 py-3.5 relative">
+      <div className="shim" />
       {/* Icon */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+      <div className="shrink-0">
         {loading ? (
-          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-blue-400/70 border-t-transparent rounded-full animate-spin" />
         ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.6)" strokeWidth="1.8">
             <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
           </svg>
         )}
@@ -47,18 +48,22 @@ export default function SearchBar({ onResults, onClear }: Props) {
         type="text"
         value={q}
         onChange={e => setQ(e.target.value)}
-        placeholder='Search your vault — e.g. "Florida dental pricing PDF"'
-        className="vault-input w-full pl-11 pr-10 py-3 text-sm"
-        style={{ borderRadius: 14, fontSize: 14 }}
+        placeholder='Search your vault — "Florida dental pricing", "Q4 contracts", "provider screenshots"…'
+        style={{ fontSize: 15 }}
       />
 
       {q && (
-        <button
-          onClick={() => { setQ(''); onClear(); }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 text-lg leading-none"
-        >
+        <button onClick={() => { setQ(''); onClear(); }}
+          className="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-white/16 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-sm leading-none">
           ×
         </button>
+      )}
+
+      {/* Keyboard hint */}
+      {!q && (
+        <div className="shrink-0 hidden sm:flex items-center gap-1">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/6 border border-white/10 text-slate-600 font-mono">⌘K</span>
+        </div>
       )}
     </div>
   );

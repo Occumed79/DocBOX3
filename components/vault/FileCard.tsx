@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-import FilePreviewModal from './FilePreviewModal';
 
 export interface VaultFile {
   id: string;
@@ -19,185 +18,147 @@ export interface VaultFile {
   headline?: string;
 }
 
-function typeClass(t: string) {
-  if (['png','jpg','jpeg'].includes(t)) return 'type-png';
-  return `type-${t}` || 'type-other';
+export function typeClass(t: string) {
+  if (['png','jpg','jpeg'].includes(t)) return 't-img';
+  const map: Record<string,string> = { pdf:'t-pdf', docx:'t-docx', xlsx:'t-xlsx', csv:'t-csv', txt:'t-txt', html:'t-html', htm:'t-html' };
+  return map[t] || 't-other';
 }
 
-function formatSize(bytes: number) {
+export function formatSize(bytes: number) {
+  if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes/1024).toFixed(1)} KB`;
-  return `${(bytes/(1024*1024)).toFixed(1)} MB`;
+  if (bytes < 1048576) return `${(bytes/1024).toFixed(1)} KB`;
+  return `${(bytes/1048576).toFixed(1)} MB`;
 }
 
-function formatDate(d: string) {
+export function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
 interface Props {
   file: VaultFile;
+  selected?: boolean;
+  onSelect: (f: VaultFile) => void;
   onUpdate: (f: VaultFile) => void;
   onDelete: (id: string) => void;
   searchMode?: boolean;
 }
 
-export default function FileCard({ file, onUpdate, onDelete, searchMode }: Props) {
-  const [showPreview, setShowPreview] = useState(false);
+export default function FileCard({ file, selected, onSelect, onUpdate, onDelete, searchMode }: Props) {
   const [editNotes, setEditNotes] = useState(false);
   const [notes, setNotes] = useState(file.notes || '');
-  const [saving, setSaving] = useState(false);
 
   const isImage = ['png','jpg','jpeg'].includes(file.file_type);
 
   const saveNotes = async () => {
-    setSaving(true);
     const res = await fetch('/api/files', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: file.id, notes }),
     });
-    if (res.ok) {
-      const updated = await res.json();
-      onUpdate({ ...file, notes: updated.notes });
-    }
-    setSaving(false);
+    if (res.ok) { const u = await res.json(); onUpdate({ ...file, notes: u.notes }); }
     setEditNotes(false);
   };
 
   const archive = async () => {
     if (!confirm(`Archive "${file.name}"?`)) return;
-    await fetch('/api/files', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: file.id, is_archived: true }),
-    });
+    await fetch('/api/files', { method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: file.id, is_archived: true }) });
     onDelete(file.id);
   };
 
   const del = async () => {
-    if (!confirm(`Permanently delete "${file.name}"? This cannot be undone.`)) return;
-    await fetch('/api/files', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: file.id }),
-    });
+    if (!confirm(`Permanently delete "${file.name}"?`)) return;
+    await fetch('/api/files', { method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: file.id }) });
     onDelete(file.id);
   };
 
   return (
-    <>
-      <div className="gc-sm relative overflow-hidden group transition-all hover:border-white/16 hover:shadow-lg" style={{ padding: '14px 16px' }}>
-        <div className="shimmer-top" />
+    <div
+      className={`glass-card relative overflow-hidden cursor-pointer group fade-up ${selected ? 'selected' : ''}`}
+      style={{ padding: '14px 16px' }}
+      onClick={() => onSelect(file)}
+    >
+      <div className="shim" />
+      <div className="flex items-start gap-3">
 
-        <div className="flex items-start gap-3">
-          {/* Thumbnail or type icon */}
-          <div
-            className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center overflow-hidden cursor-pointer bg-white/5 border border-white/8"
-            onClick={() => setShowPreview(true)}
-          >
-            {isImage && file.storage_url.startsWith('data:') ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover" />
-            ) : (
-              <span className={`type-badge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
+        {/* Thumbnail */}
+        <div className="thumb w-11 h-11 shrink-0" onClick={e => { e.stopPropagation(); onSelect(file); }}>
+          {isImage && file.storage_url.startsWith('data:') ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover rounded-lg" />
+          ) : (
+            <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2">
+            <p className="text-sm font-semibold text-slate-100 leading-tight truncate flex-1">{file.name}</p>
+            <span className={`tbadge ${typeClass(file.file_type)} shrink-0 mt-0.5`}>{file.file_type.toUpperCase()}</span>
+          </div>
+
+          <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+            <span className="text-[10px] text-slate-600">{formatSize(file.size_bytes)}</span>
+            <span className="text-[10px] text-slate-700">·</span>
+            <span className="text-[10px] text-slate-600">{formatDate(file.upload_date)}</span>
+            {searchMode && file.folder_name && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/6 border border-white/8 text-slate-500">
+                {file.folder_name}
+              </span>
             )}
           </div>
 
-          <div className="flex-1 min-w-0">
-            {/* Name + badge */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => setShowPreview(true)}
-                className="text-sm font-medium text-slate-100 hover:text-white truncate max-w-[280px] text-left"
-              >
-                {file.name}
-              </button>
-              <span className={`type-badge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
-            </div>
-
-            {/* Meta row */}
-            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-              <span className="text-[10px] text-slate-600">{formatSize(file.size_bytes)}</span>
-              <span className="text-[10px] text-slate-600">{formatDate(file.upload_date)}</span>
-              {searchMode && file.folder_name && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/6 border border-white/8 text-slate-500">
-                  📁 {file.folder_name}
-                </span>
-              )}
-              {file.tags?.length > 0 && file.tags.map(tag => (
-                <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+          {file.tags?.length > 0 && (
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              {file.tags.map(tag => (
+                <span key={tag} className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
                   {tag}
                 </span>
               ))}
             </div>
+          )}
 
-            {/* Search headline */}
-            {file.headline && (
-              <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed line-clamp-2"
-                dangerouslySetInnerHTML={{ __html: file.headline }} />
-            )}
+          {/* Search headline */}
+          {file.headline && (
+            <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed line-clamp-2"
+              dangerouslySetInnerHTML={{ __html: file.headline }} />
+          )}
 
-            {/* Notes */}
-            {editNotes ? (
-              <div className="mt-2 flex gap-2">
-                <input
-                  autoFocus
-                  className="vault-input flex-1 text-xs px-2.5 py-1.5"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Add a note…"
-                  onKeyDown={e => { if (e.key === 'Enter') saveNotes(); if (e.key === 'Escape') setEditNotes(false); }}
-                />
-                <button onClick={saveNotes} disabled={saving} className="btn-primary text-xs px-3 py-1.5">
-                  {saving ? '…' : 'Save'}
-                </button>
-                <button onClick={() => setEditNotes(false)} className="btn-ghost text-xs px-3 py-1.5">Cancel</button>
-              </div>
-            ) : file.notes ? (
-              <p
-                className="text-[11px] text-slate-500 mt-1.5 italic cursor-pointer hover:text-slate-300 transition-colors"
-                onClick={() => setEditNotes(true)}
-              >
-                {file.notes}
-              </p>
-            ) : null}
-          </div>
+          {/* Notes */}
+          {editNotes ? (
+            <div className="mt-2 flex gap-2" onClick={e => e.stopPropagation()}>
+              <input autoFocus
+                className="flex-1 bg-white/6 border border-white/12 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500/40"
+                value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Add a note…"
+                onKeyDown={e => { if (e.key==='Enter') saveNotes(); if(e.key==='Escape') setEditNotes(false); }}
+              />
+              <button onClick={saveNotes} className="btn-primary text-xs px-3 py-1.5">Save</button>
+            </div>
+          ) : file.notes ? (
+            <p className="text-[11px] text-slate-500 mt-1.5 italic cursor-pointer hover:text-slate-300 transition-colors"
+              onClick={e => { e.stopPropagation(); setEditNotes(true); }}>
+              {file.notes}
+            </p>
+          ) : null}
+        </div>
 
-          {/* Actions */}
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            <button title="Preview" onClick={() => setShowPreview(true)}
-              className="w-7 h-7 rounded-lg btn-ghost flex items-center justify-center text-xs">
-              👁
-            </button>
-            <button title="Add/edit note" onClick={() => setEditNotes(!editNotes)}
-              className="w-7 h-7 rounded-lg btn-ghost flex items-center justify-center text-xs">
-              ✎
-            </button>
-            <button title="Download"
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = file.storage_url;
-                a.download = file.original_name;
-                a.click();
-              }}
-              className="w-7 h-7 rounded-lg btn-ghost flex items-center justify-center text-xs">
-              ↓
-            </button>
-            <button title="Archive" onClick={archive}
-              className="w-7 h-7 rounded-lg btn-ghost flex items-center justify-center text-xs">
-              ▣
-            </button>
-            <button title="Delete" onClick={del}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-xs bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all">
-              ×
-            </button>
-          </div>
+        {/* Action buttons — visible on hover */}
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          onClick={e => e.stopPropagation()}>
+          <button title="Add note" onClick={() => setEditNotes(!editNotes)}
+            className="btn-ghost w-7 h-7 flex items-center justify-center text-xs rounded-lg">✎</button>
+          <button title="Download"
+            onClick={() => { const a=document.createElement('a'); a.href=file.storage_url; a.download=file.original_name; a.click(); }}
+            className="btn-ghost w-7 h-7 flex items-center justify-center text-xs rounded-lg">↓</button>
+          <button title="Archive" onClick={archive}
+            className="btn-ghost w-7 h-7 flex items-center justify-center text-xs rounded-lg">▣</button>
+          <button title="Delete" onClick={del}
+            className="w-7 h-7 flex items-center justify-center text-xs rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all">×</button>
         </div>
       </div>
-
-      {showPreview && (
-        <FilePreviewModal file={file} onClose={() => setShowPreview(false)} />
-      )}
-    </>
+    </div>
   );
 }
