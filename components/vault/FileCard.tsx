@@ -24,6 +24,26 @@ export function typeClass(t: string) {
   return map[t] || 't-other';
 }
 
+function typeGradient(t: string): string {
+  if (['png','jpg','jpeg'].includes(t))
+    return 'linear-gradient(135deg, rgba(34,197,94,0.18), rgba(16,185,129,0.12))';
+  if (t === 'pdf')
+    return 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(220,38,38,0.12))';
+  if (['docx','txt','html','htm'].includes(t))
+    return 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(37,99,235,0.12))';
+  if (['xlsx','csv'].includes(t))
+    return 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(6,182,212,0.12))';
+  return 'linear-gradient(135deg, rgba(100,116,139,0.18), rgba(71,85,105,0.12))';
+}
+
+function typeBorder(t: string): string {
+  if (['png','jpg','jpeg'].includes(t)) return 'rgba(34,197,94,0.25)';
+  if (t === 'pdf') return 'rgba(239,68,68,0.25)';
+  if (['docx','txt','html','htm'].includes(t)) return 'rgba(59,130,246,0.25)';
+  if (['xlsx','csv'].includes(t)) return 'rgba(16,185,129,0.25)';
+  return 'rgba(100,116,139,0.25)';
+}
+
 export function formatSize(bytes: number) {
   if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
@@ -80,14 +100,25 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
       style={{ padding: '14px 16px' }}
       onClick={() => onSelect(file)}
     >
+      {/* Selected left accent */}
+      {selected && (
+        <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full"
+          style={{ background: 'linear-gradient(180deg, rgba(96,165,250,0.8), rgba(99,102,241,0.6))' }} />
+      )}
       <div className="shim" />
       <div className="flex items-start gap-3">
 
         {/* Thumbnail */}
-        <div className="thumb w-11 h-11 shrink-0" onClick={e => { e.stopPropagation(); onSelect(file); }}>
+        <div className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center"
+          style={{
+            background: typeGradient(file.file_type),
+            border: `1px solid ${typeBorder(file.file_type)}`,
+            boxShadow: `0 0 12px ${typeBorder(file.file_type).replace('0.25', '0.10')}`
+          }}
+          onClick={e => { e.stopPropagation(); onSelect(file); }}>
           {isImage && file.storage_url.startsWith('data:') ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover rounded-lg" />
+            <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover rounded-xl" />
           ) : (
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
           )}
