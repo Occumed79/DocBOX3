@@ -57,47 +57,62 @@ export default function DropZone({ folderId, onUploaded, onClose }: Props) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: ACCEPTED, multiple: true });
 
   return (
-    <div className="relative glass rounded-2xl overflow-hidden" style={{ padding: '2px' }}>
-      <div className="shim" />
-      <div
-        {...getRootProps()}
-        className={`drop-zone p-10 text-center ${isDragActive ? 'active' : ''}`}
-      >
-        <input {...getInputProps()} />
+    <div className="relative rounded-2xl overflow-hidden"
+      style={{
+        padding: '1.5px',
+        background: 'linear-gradient(145deg, rgba(255,255,255,0.12) 0%, rgba(59,130,246,0.18) 50%, rgba(99,102,241,0.14) 100%)',
+      }}>
+      <div className="relative glass rounded-[14px] overflow-hidden">
+        <div className="shim" />
+        <div
+          {...getRootProps()}
+          className={`drop-zone p-10 text-center ${isDragActive ? 'active' : ''}`}
+        >
+          <input {...getInputProps()} />
 
-        {uploading.length > 0 ? (
-          <div className="space-y-3">
-            <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-slate-300 font-medium">Uploading {uploading.length} file{uploading.length > 1 ? 's' : ''}…</p>
-            <div className="space-y-1 text-xs text-slate-600">
-              {uploading.map(n => <div key={n} className="truncate">{n}</div>)}
+          {uploading.length > 0 ? (
+            <div className="space-y-3">
+              <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-slate-300 font-medium">Uploading {uploading.length} file{uploading.length > 1 ? 's' : ''}…</p>
+              <div className="space-y-1 text-xs text-slate-600">
+                {uploading.map(n => <div key={n} className="truncate">{n}</div>)}
+              </div>
             </div>
-          </div>
-        ) : done.length > 0 ? (
-          <div className="space-y-2">
-            <div className="text-2xl">✓</div>
-            <p className="text-sm text-emerald-400 font-medium">{done.length} file{done.length > 1 ? 's' : ''} uploaded</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="w-12 h-12 mx-auto glass-card flex items-center justify-center rounded-2xl">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.7)" strokeWidth="1.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
+          ) : done.length > 0 ? (
+            <div className="space-y-2">
+              <div className="w-10 h-10 mx-auto flex items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(52,211,153,0.85)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <p className="text-sm text-emerald-400 font-medium">{done.length} file{done.length > 1 ? 's' : ''} uploaded</p>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-200">{isDragActive ? 'Release to upload' : 'Drop files here'}</p>
-              <p className="text-xs text-slate-600 mt-1">PDF · PNG · JPG · DOCX · XLSX · CSV · TXT · HTML</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="w-14 h-14 mx-auto flex items-center justify-center rounded-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.10))',
+                  border: '1px solid rgba(96,165,250,0.20)',
+                  boxShadow: '0 0 20px rgba(59,130,246,0.10)'
+                }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.75)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-200">{isDragActive ? 'Release to upload' : 'Drop files here or click to browse'}</p>
+                <p className="text-xs text-slate-600 mt-1.5">PDF · PNG · JPG · DOCX · XLSX · CSV · TXT · HTML</p>
+              </div>
             </div>
+          )}
+        </div>
+        {errors.length > 0 && (
+          <div className="px-4 pb-4 space-y-1">
+            {errors.map((e, i) => <p key={i} className="text-xs text-red-400">{e}</p>)}
           </div>
         )}
       </div>
-      {errors.length > 0 && (
-        <div className="px-4 pb-4 space-y-1">
-          {errors.map((e, i) => <p key={i} className="text-xs text-red-400">{e}</p>)}
-        </div>
-      )}
     </div>
   );
 }
