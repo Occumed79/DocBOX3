@@ -231,7 +231,7 @@ export default function Home() {
         <div className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ${selectedFile ? 'max-w-[56%]' : ''}`}>
 
           {/* Section label */}
-          <div className="px-6 py-3 shrink-0 flex items-center justify-between border-b border-white/5">
+          <div className="section-bar px-6 py-3 shrink-0 flex items-center justify-between">
             <div>
               <span className="text-xs font-semibold text-slate-300">
                 {isSearching ? `Results for "${searchQuery}"` : activeFolder ? folders.find(f=>f.id===activeFolder)?.name : navView === 'archive' ? 'Archive' : 'All Files'}
@@ -256,7 +256,7 @@ export default function Home() {
               ))
             ) : displayFiles.length === 0 ? (
               <EmptyState isSearching={isSearching} searchQuery={searchQuery} navView={navView}
-                onUpload={() => setShowUpload(true)} />
+                onUpload={() => setShowUpload(true)} onCreateFolder={() => setShowNewFolder(true)} />
             ) : (
               displayFiles.map(f => (
                 <FileCard
@@ -327,18 +327,26 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
   return (
     <>
       <div className="preview-pane flex flex-col border-l border-white/7 overflow-hidden" style={{ width: '44%', minWidth: 320 }}>
+        {/* Document Review header */}
+        <div className="px-5 py-3.5 border-b border-white/7 shrink-0 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-300/80">Document Review</span>
+          </div>
+          <button onClick={onClose} className="btn-ghost w-7 h-7 flex items-center justify-center text-sm shrink-0">×</button>
+        </div>
+
         {/* Pane header */}
         <div className="px-5 py-4 border-b border-white/7 shrink-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-100 truncate leading-snug">{file.name}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">{file.original_name}</p>
-            </div>
-            <button onClick={onClose} className="btn-ghost w-7 h-7 flex items-center justify-center text-sm shrink-0">×</button>
+          <div className="min-w-0 mb-2">
+            <p className="text-sm font-semibold text-slate-100 truncate leading-snug">{file.name}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">{file.original_name}</p>
           </div>
 
           {/* Meta */}
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
             <span className="text-[10px] text-slate-600">{formatSize(file.size_bytes)}</span>
             <span className="text-[10px] text-slate-600">{formatDate(file.upload_date)}</span>
@@ -357,75 +365,149 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
           </div>
         </div>
 
-        {/* Document preview */}
-        <div className="flex-1 overflow-auto min-h-0 relative">
-          {!url ? (
-            <div className="flex items-center justify-center h-48">
-              <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : isImage ? (
-            <div className="flex items-center justify-center p-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={file.name}
-                className="max-w-full rounded-xl object-contain shadow-2xl cursor-zoom-in"
-                onClick={() => setShowFull(true)} />
-            </div>
-          ) : isPdf ? (
-            <iframe src={url} className="w-full h-full" style={{ minHeight: 500, border: 'none', background: '#11131f' }} title={file.name} />
-          ) : isText ? (
-            <InlineText url={url} />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16 gap-4 px-6 text-center">
-              <div className="text-5xl opacity-30">📄</div>
-              <p className="text-slate-400 text-sm">No preview for .{file.file_type}</p>
-              {url && (
-                <a href={url} download={file.original_name} className="btn-primary text-sm px-4 py-2">Download</a>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Notes section */}
-        <div className="px-5 py-4 border-t border-white/7 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] text-slate-600 uppercase tracking-widest font-semibold">Notes</span>
-            {!editNotes && (
-              <button onClick={() => setEditNotes(true)}
-                className="text-[10px] text-slate-600 hover:text-blue-400 transition-colors">
-                {file.notes ? 'Edit' : '+ Add'}
-              </button>
+        {/* Scrollable review content */}
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-3 p-4">
+          {/* Document preview */}
+          <div className="relative">
+            {!url ? (
+              <div className="flex items-center justify-center h-40 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : isImage ? (
+              <div className="flex items-center justify-center p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={file.name}
+                  className="max-w-full rounded-lg object-contain shadow-xl cursor-zoom-in"
+                  onClick={() => setShowFull(true)} />
+              </div>
+            ) : isPdf ? (
+              <iframe src={url} className="w-full rounded-xl" style={{ height: 320, border: 'none', background: '#11131f' }} title={file.name} />
+            ) : isText ? (
+              <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden">
+                <InlineText url={url} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 gap-4 px-6 text-center rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div className="text-4xl opacity-30">📄</div>
+                <p className="text-slate-400 text-sm">No preview for .{file.file_type}</p>
+                {url && (
+                  <a href={url} download={file.original_name} className="btn-primary text-sm px-4 py-2">Download</a>
+                )}
+              </div>
             )}
           </div>
-          {editNotes ? (
-            <div className="space-y-2">
-              <textarea
-                autoFocus rows={3}
-                className="w-full bg-white/6 border border-white/12 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-blue-500/40 resize-none"
-                value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Add context, descriptions, or tags for this file…"
-              />
-              <div className="flex gap-2">
-                <button onClick={saveNotes} className="btn-primary text-xs px-3 py-1.5">Save</button>
-                <button onClick={() => setEditNotes(false)} className="btn-ghost text-xs px-3 py-1.5">Cancel</button>
-              </div>
+
+          {/* AI Summary placeholder */}
+          <div className="review-section">
+            <div className="review-section-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12 2.5 12"/><path d="M12 12V2.5"/>
+              </svg>
+              AI Summary
             </div>
-          ) : (
-            <p className="text-xs text-slate-500 leading-relaxed cursor-pointer hover:text-slate-300 transition-colors"
-              onClick={() => setEditNotes(true)}>
-              {file.notes || <span className="italic opacity-50">No notes yet</span>}
-            </p>
-          )}
+            <div className="review-placeholder">
+              <p className="review-placeholder-text">AI-generated summaries will appear here once backend extraction is enabled.</p>
+            </div>
+          </div>
+
+          {/* Extracted Text placeholder */}
+          <div className="review-section">
+            <div className="review-section-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+              </svg>
+              Extracted Text
+            </div>
+            <div className="review-placeholder">
+              <p className="review-placeholder-text">Full-text extraction from PDFs and images will be searchable here.</p>
+            </div>
+          </div>
 
           {/* Tags */}
-          {file.tags?.length > 0 && (
-            <div className="flex gap-1.5 mt-3 flex-wrap">
-              {file.tags.map(tag => (
-                <span key={tag} className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                  {tag}
-                </span>
-              ))}
+          <div className="review-section">
+            <div className="review-section-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+              </svg>
+              Tags
             </div>
-          )}
+            {file.tags?.length > 0 ? (
+              <div className="flex gap-1.5 flex-wrap">
+                {file.tags.map(tag => (
+                  <span key={tag} className="text-[10px] px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 italic">No tags yet</p>
+            )}
+          </div>
+
+          {/* Metadata */}
+          <div className="review-section">
+            <div className="review-section-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+              Metadata
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Type</p>
+                <p className="text-xs text-slate-300">{file.file_type.toUpperCase()}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Size</p>
+                <p className="text-xs text-slate-300">{formatSize(file.size_bytes)}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Uploaded</p>
+                <p className="text-xs text-slate-300">{formatDate(file.upload_date)}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Source</p>
+                <p className="text-xs text-slate-300 truncate">{file.original_name}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Source Notes */}
+          <div className="review-section">
+            <div className="flex items-center justify-between mb-2">
+              <div className="review-section-title !mb-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Source Notes
+              </div>
+              {!editNotes && (
+                <button onClick={() => setEditNotes(true)}
+                  className="text-[10px] text-slate-600 hover:text-blue-400 transition-colors">
+                  {file.notes ? 'Edit' : '+ Add'}
+                </button>
+              )}
+            </div>
+            {editNotes ? (
+              <div className="space-y-2">
+                <textarea
+                  autoFocus rows={3}
+                  className="w-full bg-white/6 border border-white/12 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-blue-500/40 resize-none"
+                  value={notes} onChange={e => setNotes(e.target.value)}
+                  placeholder="Add context, descriptions, or source notes for this file…"
+                />
+                <div className="flex gap-2">
+                  <button onClick={saveNotes} className="btn-primary text-xs px-3 py-1.5">Save</button>
+                  <button onClick={() => setEditNotes(false)} className="btn-ghost text-xs px-3 py-1.5">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 leading-relaxed cursor-pointer hover:text-slate-300 transition-colors"
+                onClick={() => setEditNotes(true)}>
+                {file.notes || <span className="italic opacity-50">No source notes yet. Click to add research context.</span>}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -448,8 +530,8 @@ function InlineText({ url }: { url: string }) {
   );
 }
 
-function EmptyState({ isSearching, searchQuery, navView, onUpload }:
-  { isSearching: boolean; searchQuery: string; navView: string; onUpload: () => void }) {
+function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolder }:
+  { isSearching: boolean; searchQuery: string; navView: string; onUpload: () => void; onCreateFolder: () => void }) {
   if (isSearching) return (
     <div className="glass-card text-center py-16 px-8 relative overflow-hidden">
       <div className="shim" />
@@ -464,16 +546,67 @@ function EmptyState({ isSearching, searchQuery, navView, onUpload }:
     </div>
   );
   return (
-    <div className="glass-card text-center py-16 px-8 relative overflow-hidden">
-      <div className="shim" />
-      <div className="w-14 h-14 glass-card mx-auto mb-4 flex items-center justify-center rounded-2xl">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.5)" strokeWidth="1.5">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-        </svg>
+    <div className="fade-up">
+      {/* Hero empty state */}
+      <div className="empty-hero text-center py-12 px-8 mb-6">
+        <div className="shim" />
+        <div className="relative z-10 max-w-lg mx-auto">
+          <div className="w-16 h-16 mx-auto mb-5 flex items-center justify-center rounded-2xl"
+            style={{
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.14))',
+              border: '1px solid rgba(96,165,250,0.25)',
+              boxShadow: '0 0 24px rgba(59,130,246,0.15)'
+            }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2 tracking-tight">Build your searchable source vault</h2>
+          <p className="text-sm text-slate-500 leading-relaxed mb-6 max-w-md mx-auto">
+            Upload PDFs, screenshots, notes, fee schedules, contracts, and research files. Source Vault will organize them for fast search and review.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={onUpload} className="btn-primary text-sm px-6 py-2.5">Upload Files</button>
+            <button onClick={onCreateFolder}
+              className="text-sm px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/8 hover:border-white/15 transition-all">
+              Create Folder
+            </button>
+          </div>
+        </div>
       </div>
-      <p className="text-slate-300 font-semibold mb-1.5">No files here yet</p>
-      <p className="text-slate-600 text-sm mb-6">Upload your first document to get started.</p>
-      <button onClick={onUpload} className="btn-primary text-sm px-6 py-2.5">+ Upload Files</button>
+
+      {/* Onboarding cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="onboarding-card">
+          <div className="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <h3 className="text-sm font-semibold text-slate-200 mb-1">Upload documents</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">Drag and drop PDFs, images, spreadsheets, and text files into organized folders.</p>
+        </div>
+
+        <div className="onboarding-card">
+          <div className="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
+            </svg>
+          </div>
+          <h3 className="text-sm font-semibold text-slate-200 mb-1">Extract searchable content</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">Search inside documents by content, filename, tags, and your own source notes.</p>
+        </div>
+
+        <div className="onboarding-card">
+          <div className="card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <h3 className="text-sm font-semibold text-slate-200 mb-1">Review summaries, tags, and source notes</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">Add context, labels, and metadata so your research stays organized and reusable.</p>
+        </div>
+      </div>
     </div>
   );
 }

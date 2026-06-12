@@ -249,9 +249,121 @@ body {
 /* ── Highlight ──────────────────────────────────────────────────────────── */
 mark { background: rgba(251,191,36,0.22); color: #fcd34d; border-radius: 3px; padding: 0 2px; }
 
+/* ── Section label bar ──────────────────────────────────────────────────── */
+.section-bar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── Onboarding cards ───────────────────────────────────────────────────── */
+.onboarding-card {
+  background: linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.015) 100%);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-top-color: rgba(255,255,255,0.18);
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.onboarding-card:hover {
+  border-color: rgba(96,165,250,0.25);
+  border-top-color: rgba(147,197,253,0.35);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 30px rgba(59,130,246,0.10);
+  transform: translateY(-2px);
+}
+.onboarding-card .card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.14));
+  border: 1px solid rgba(96,165,250,0.25);
+  box-shadow: 0 0 16px rgba(59,130,246,0.12);
+  margin-bottom: 14px;
+}
+
+/* ── Document review placeholders ─────────────────────────────────────── */
+.review-section {
+  background: linear-gradient(160deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.012) 100%);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-top-color: rgba(255,255,255,0.14);
+  border-radius: 14px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+.review-section:hover {
+  border-color: rgba(96,165,250,0.22);
+  box-shadow: 0 0 24px rgba(59,130,246,0.08);
+}
+.review-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(148,163,184,0.7);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-placeholder {
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.review-placeholder-text {
+  font-size: 11px;
+  color: rgba(148,163,184,0.45);
+  line-height: 1.5;
+}
+
+/* ── Empty state hero ───────────────────────────────────────────────────── */
+.empty-hero {
+  background: linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-top-color: rgba(255,255,255,0.22);
+  border-radius: 20px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.08) inset,
+    0 20px 60px rgba(0,0,0,0.45),
+    0 0 0 1px rgba(0,0,0,0.2);
+  position: relative;
+  overflow: hidden;
+}
+.empty-hero .shim { opacity: 0.35; }
+
+/* ── Logo glow ────────────────────────────────────────────────────────────── */
+.logo-mark {
+  background: linear-gradient(135deg, rgba(59,130,246,0.9), rgba(99,102,241,0.85));
+  box-shadow: 0 0 20px rgba(59,130,246,0.40), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+
+/* ── Responsive preview pane ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .preview-pane { width: 100% !important; min-width: 0 !important; border-left: none; border-top: 1px solid rgba(255,255,255,0.09); }
+}
+
 /* ── Animate fade-in ────────────────────────────────────────────────────── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-up { animation: fadeUp 0.3s ease forwards; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg, rgba(148,163,184,0.35) 25%, rgba(255,255,255,0.7) 50%, rgba(148,163,184,0.35) 75%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s ease-in-out infinite;
+}
