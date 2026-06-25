@@ -89,20 +89,15 @@ export default function DropZone({ folderId, onUploaded, onClose }: Props) {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="w-14 h-14 mx-auto flex items-center justify-center rounded-2xl"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.10))',
-                  border: '1px solid rgba(96,165,250,0.20)',
-                  boxShadow: '0 0 20px rgba(59,130,246,0.10)'
-                }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.75)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <div className="upload-orb w-16 h-16 mx-auto flex items-center justify-center rounded-2xl">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-200">{isDragActive ? 'Release to upload' : 'Drop files here or click to browse'}</p>
-                <p className="text-xs text-slate-600 mt-1.5">PDF · PNG · JPG · DOCX · XLSX · CSV · TXT · HTML</p>
+                <p className="text-xs text-slate-600 mt-1.5">Upload PDFs, images, documents, spreadsheets, text files, and HTML.</p>
               </div>
             </div>
           )}

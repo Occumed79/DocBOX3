@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import SearchBar from '@/components/vault/SearchBar';
 import DropZone from '@/components/vault/DropZone';
-import FileCard, { type VaultFile } from '@/components/vault/FileCard';
+import FileCard, { type VaultFile, typeClass, formatSize, formatDate } from '@/components/vault/FileCard';
 import FilePreviewModal from '@/components/vault/FilePreviewModal';
 
 export interface Folder {
@@ -122,44 +122,39 @@ export default function Home() {
       <div className="vault-ambient" />
 
       {/* ── TOP HEADER ─────────────────────────────────────────────────── */}
-      <header className="relative z-20 shrink-0 px-6 pt-5 pb-4"
-        style={{ background: 'linear-gradient(180deg, rgba(6,8,15,0.95) 0%, rgba(6,8,15,0.75) 100%)', backdropFilter: 'blur(24px)' }}>
-
-        {/* Logo + top nav */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            {/* Logo mark */}
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-[11px] shrink-0 relative overflow-hidden"
-              style={{
-                background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(99,102,241,0.85))',
-                boxShadow: '0 0 20px rgba(59,130,246,0.40), inset 0 1px 0 rgba(255,255,255,0.22)',
-              }}>
-              <div className="shim" />
-              SV
+      <header className="relative z-30 shrink-0 px-6 pt-5 pb-4">
+        {/* Logo + nav + upload - floating pill */}
+        <div className="floating-command-bar px-5 py-3 mb-6">
+          <div className="shim" />
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="logo-mark w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white text-[10px] shrink-0 relative overflow-hidden">
+                <div className="shim" />
+                SV
+              </div>
+              <div>
+                <p className="text-[12px] font-semibold text-white leading-tight tracking-tight">Source Vault</p>
+                <p className="text-[9px] text-slate-500">Document Vault</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[13px] font-semibold text-white leading-tight tracking-tight">Source Vault</p>
-              <p className="text-[10px] text-slate-600">Document Storage & Search</p>
-            </div>
-          </div>
 
-          {/* Nav + upload */}
-          <div className="flex items-center gap-2">
-            {(['all','archive'] as NavView[]).map(v => (
-              <button key={v} onClick={() => { setNavView(v); setIsSearching(false); setActiveFolder(null); }}
-                className={`nav-item capitalize ${navView === v && !isSearching ? 'active' : ''}`}>
-                {v === 'all' ? 'All Files' : 'Archive'}
+            <div className="flex items-center gap-2">
+              {(['all','archive'] as NavView[]).map(v => (
+                <button key={v} onClick={() => { setNavView(v); setIsSearching(false); setActiveFolder(null); }}
+                  className={`nav-item capitalize ${navView === v && !isSearching ? 'active' : ''}`}>
+                  {v === 'all' ? 'All Files' : 'Archive'}
+                </button>
+              ))}
+              <div className="w-px h-4 bg-white/10 mx-1" />
+              <button onClick={() => setShowUpload(!showUpload)}
+                className="btn-primary text-[11px] px-3 py-1.5 flex items-center gap-1.5">
+                {showUpload ? '× Close' : (
+                  <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>Upload</>
+                )}
               </button>
-            ))}
-            <div className="w-px h-5 bg-white/10 mx-1" />
-            <button onClick={() => setShowUpload(!showUpload)}
-              className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5">
-              {showUpload ? '× Close' : (
-                <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>Upload</>
-              )}
-            </button>
+            </div>
           </div>
         </div>
 
@@ -170,8 +165,7 @@ export default function Home() {
         />
 
         {/* ── FOLDER PILLS ────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-          {/* "All" pill */}
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           <button
             onClick={() => { setActiveFolder(null); setNavView('all'); setIsSearching(false); }}
             className={`folder-pill ${!activeFolder && !isSearching && navView==='all' ? 'active' : ''}`}>
@@ -185,26 +179,25 @@ export default function Home() {
               <FolderIcon color={folder.color} />
               {folder.name}
               {folder.file_count > 0 && (
-                <span className="text-[9px] opacity-60 ml-0.5">{folder.file_count}</span>
+                <span className="text-[9px] opacity-70 ml-0.5">{folder.file_count}</span>
               )}
             </button>
           ))}
 
-          {/* New folder pill */}
           {showNewFolder ? (
             <div className="flex items-center gap-1.5 shrink-0">
               <input autoFocus
-                className="bg-white/7 border border-white/15 rounded-full px-3 py-1 text-xs text-slate-200 outline-none focus:border-blue-400/40 w-36"
+                className="bg-white/[0.05] border border-white/10 rounded-full px-3 py-1 text-[11px] text-slate-200 outline-none focus:border-blue-400/40 w-32"
                 placeholder="Folder name…"
                 value={newFolderName}
                 onChange={e => setNewFolderName(e.target.value)}
                 onKeyDown={e => { if (e.key==='Enter') createFolder(); if (e.key==='Escape') setShowNewFolder(false); }}
               />
-              <button onClick={createFolder} className="folder-pill active text-[11px] px-3">✓</button>
+              <button onClick={createFolder} className="folder-pill active text-[10px] px-2.5">✓</button>
             </div>
           ) : (
             <button onClick={() => setShowNewFolder(true)}
-              className="folder-pill text-slate-600 hover:text-blue-400 shrink-0">
+              className="folder-pill text-slate-500 hover:text-blue-400 shrink-0">
               + New Folder
             </button>
           )}
@@ -213,43 +206,44 @@ export default function Home() {
 
       {/* ── UPLOAD DRAWER ────────────────────────────────────────────────── */}
       {showUpload && (
-        <div className="relative z-20 shrink-0 px-6 pb-4 pt-2"
-          style={{ background: 'rgba(6,8,15,0.6)', backdropFilter: 'blur(12px)' }}>
-          <DropZone folderId={activeFolder} onUploaded={handleUploaded} onClose={() => setShowUpload(false)} />
-          {activeFolder && (
-            <p className="text-[10px] text-slate-600 mt-2 pl-1">
-              Uploading into: <span className="text-slate-400">{folders.find(f=>f.id===activeFolder)?.name}</span>
-            </p>
-          )}
+        <div className="relative z-20 shrink-0 px-4 pb-4 pt-1 drawer-enter">
+          <div className="liquid-panel px-4 py-4">
+            <DropZone folderId={activeFolder} onUploaded={handleUploaded} onClose={() => setShowUpload(false)} />
+            {activeFolder && (
+              <p className="text-[10px] text-slate-500 mt-2 pl-1">
+                Uploading into: <span className="text-slate-300">{folders.find(f=>f.id===activeFolder)?.name}</span>
+              </p>
+            )}
+          </div>
         </div>
       )}
 
       {/* ── MAIN CONTENT AREA ─────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden px-4 pb-4">
 
         {/* ── FILE LIST ───────────────────────────────────────────────── */}
         <div className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ${selectedFile ? 'max-w-[56%]' : ''}`}>
 
           {/* Section label */}
-          <div className="section-bar px-6 py-3 shrink-0 flex items-center justify-between">
+          <div className="section-bar px-5 py-3.5 shrink-0 flex items-center justify-between rounded-t-xl border-t border-l border-r border-white/8">
             <div>
-              <span className="text-xs font-semibold text-slate-300">
+              <span className="text-xs font-semibold text-slate-200">
                 {isSearching ? `Results for "${searchQuery}"` : activeFolder ? folders.find(f=>f.id===activeFolder)?.name : navView === 'archive' ? 'Archive' : 'All Files'}
               </span>
-              <span className="text-[10px] text-slate-600 ml-2">
+              <span className="text-[10px] text-slate-500 ml-2">
                 {displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}
               </span>
             </div>
             {selectedFile && (
               <button onClick={() => setSelectedFile(null)}
-                className="text-[10px] text-slate-600 hover:text-slate-300 transition-colors">
+                className="text-[10px] text-slate-500 hover:text-slate-200 transition-colors">
                 Close preview ×
               </button>
             )}
           </div>
 
           {/* Files */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2.5">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
             {loading ? (
               [...Array(6)].map((_,i) => (
                 <div key={i} className="glass-card h-16 animate-pulse" style={{ opacity: 1 - i*0.15 }} />
@@ -322,18 +316,16 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
     onDelete(file.id);
   };
 
-  const { typeClass, formatSize, formatDate } = require('@/components/vault/FileCard');
-
   return (
     <>
-      <div className="preview-pane flex flex-col border-l border-white/7 overflow-hidden" style={{ width: '44%', minWidth: 320 }}>
-        {/* Document Review header */}
+      <div className="preview-pane flex flex-col overflow-hidden rounded-r-xl" style={{ width: '44%', minWidth: 320 }}>
+        {/* Inspector header */}
         <div className="px-5 py-3.5 border-b border-white/7 shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
             </svg>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-300/80">Document Review</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-300/90">File Inspector</span>
           </div>
           <button onClick={onClose} className="btn-ghost w-7 h-7 flex items-center justify-center text-sm shrink-0">×</button>
         </div>
@@ -348,8 +340,8 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
           {/* Meta */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
-            <span className="text-[10px] text-slate-600">{formatSize(file.size_bytes)}</span>
-            <span className="text-[10px] text-slate-600">{formatDate(file.upload_date)}</span>
+            <span className="text-[10px] text-slate-500">{formatSize(file.size_bytes)}</span>
+            <span className="text-[10px] text-slate-500">{formatDate(file.upload_date)}</span>
           </div>
 
           {/* Action row */}
@@ -365,10 +357,16 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
           </div>
         </div>
 
-        {/* Scrollable review content */}
+        {/* Scrollable inspector content */}
         <div className="flex-1 overflow-y-auto min-h-0 space-y-3 p-4">
-          {/* Document preview */}
-          <div className="relative">
+          {/* Preview */}
+          <div className="inspector-card">
+            <div className="inspector-card-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              Preview
+            </div>
             {!url ? (
               <div className="flex items-center justify-center h-40 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                 <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -397,35 +395,41 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
             )}
           </div>
 
-          {/* AI Summary placeholder */}
-          <div className="review-section">
-            <div className="review-section-title">
+          {/* File Details */}
+          <div className="inspector-card">
+            <div className="inspector-card-title">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12 2.5 12"/><path d="M12 12V2.5"/>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
               </svg>
-              AI Summary
+              File Details
             </div>
-            <div className="review-placeholder">
-              <p className="review-placeholder-text">AI-generated summaries will appear here once backend extraction is enabled.</p>
-            </div>
-          </div>
-
-          {/* Extracted Text placeholder */}
-          <div className="review-section">
-            <div className="review-section-title">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
-              </svg>
-              Extracted Text
-            </div>
-            <div className="review-placeholder">
-              <p className="review-placeholder-text">Full-text extraction from PDFs and images will be searchable here.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Type</p>
+                <p className="text-xs text-slate-300">{file.file_type.toUpperCase()}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Size</p>
+                <p className="text-xs text-slate-300">{formatSize(file.size_bytes)}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Uploaded</p>
+                <p className="text-xs text-slate-300">{formatDate(file.upload_date)}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Folder</p>
+                <p className="text-xs text-slate-300 truncate">{file.folder_name || 'Root'}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 col-span-2">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Original name</p>
+                <p className="text-xs text-slate-300 truncate">{file.original_name}</p>
+              </div>
             </div>
           </div>
 
           {/* Tags */}
-          <div className="review-section">
-            <div className="review-section-title">
+          <div className="inspector-card">
+            <div className="inspector-card-title">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
               </svg>
@@ -440,50 +444,22 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-slate-600 italic">No tags yet</p>
+              <p className="text-xs text-slate-500 italic">No tags yet</p>
             )}
           </div>
 
-          {/* Metadata */}
-          <div className="review-section">
-            <div className="review-section-title">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
-              </svg>
-              Metadata
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Type</p>
-                <p className="text-xs text-slate-300">{file.file_type.toUpperCase()}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Size</p>
-                <p className="text-xs text-slate-300">{formatSize(file.size_bytes)}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Uploaded</p>
-                <p className="text-xs text-slate-300">{formatDate(file.upload_date)}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Source</p>
-                <p className="text-xs text-slate-300 truncate">{file.original_name}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Source Notes */}
-          <div className="review-section">
+          {/* Notes */}
+          <div className="inspector-card">
             <div className="flex items-center justify-between mb-2">
-              <div className="review-section-title !mb-0">
+              <div className="inspector-card-title !mb-0">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
-                Source Notes
+                Notes
               </div>
               {!editNotes && (
                 <button onClick={() => setEditNotes(true)}
-                  className="text-[10px] text-slate-600 hover:text-blue-400 transition-colors">
+                  className="text-[10px] text-slate-500 hover:text-blue-400 transition-colors">
                   {file.notes ? 'Edit' : '+ Add'}
                 </button>
               )}
@@ -492,9 +468,9 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
               <div className="space-y-2">
                 <textarea
                   autoFocus rows={3}
-                  className="w-full bg-white/6 border border-white/12 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-blue-500/40 resize-none"
+                  className="w-full bg-white/[0.06] border border-white/[0.12] rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-blue-500/40 resize-none"
                   value={notes} onChange={e => setNotes(e.target.value)}
-                  placeholder="Add context, descriptions, or source notes for this file…"
+                  placeholder="Add notes or context for this file…"
                 />
                 <div className="flex gap-2">
                   <button onClick={saveNotes} className="btn-primary text-xs px-3 py-1.5">Save</button>
@@ -504,7 +480,7 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
             ) : (
               <p className="text-xs text-slate-500 leading-relaxed cursor-pointer hover:text-slate-300 transition-colors"
                 onClick={() => setEditNotes(true)}>
-                {file.notes || <span className="italic opacity-50">No source notes yet. Click to add research context.</span>}
+                {file.notes || <span className="italic opacity-50">No notes yet. Click to add context.</span>}
               </p>
             )}
           </div>
@@ -533,78 +509,88 @@ function InlineText({ url }: { url: string }) {
 function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolder }:
   { isSearching: boolean; searchQuery: string; navView: string; onUpload: () => void; onCreateFolder: () => void }) {
   if (isSearching) return (
-    <div className="glass-card text-center py-16 px-8 relative overflow-hidden">
+    <div className="glass-card text-center py-12 px-6 relative overflow-hidden">
       <div className="shim" />
-      <p className="text-slate-300 font-semibold">No results for &ldquo;{searchQuery}&rdquo;</p>
-      <p className="text-slate-600 text-sm mt-2">Try different words — search covers filenames, content, notes, and tags.</p>
+      <p className="text-slate-200 font-semibold text-sm">No results for &ldquo;{searchQuery}&rdquo;</p>
+      <p className="text-slate-500 text-xs mt-2">Try different words — search covers filenames, content, notes, and tags.</p>
     </div>
   );
   if (navView === 'archive') return (
-    <div className="glass-card text-center py-14 relative overflow-hidden">
+    <div className="glass-card text-center py-10 relative overflow-hidden">
       <div className="shim" />
-      <p className="text-slate-600 text-sm">Archive is empty.</p>
+      <p className="text-slate-500 text-xs">Archive is empty.</p>
     </div>
   );
   return (
     <div className="fade-up">
-      {/* Hero empty state */}
-      <div className="empty-hero text-center py-12 px-8 mb-6">
+      {/* Hero empty state - Apple landing card style */}
+      <div className="empty-hero text-center py-10 px-6 mb-6">
         <div className="shim" />
-        <div className="relative z-10 max-w-lg mx-auto">
-          <div className="w-16 h-16 mx-auto mb-5 flex items-center justify-center rounded-2xl"
+        <div className="relative z-10 max-w-md mx-auto">
+          <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-2xl"
             style={{
-              background: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.14))',
-              border: '1px solid rgba(96,165,250,0.25)',
-              boxShadow: '0 0 24px rgba(59,130,246,0.15)'
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.10))',
+              border: '1px solid rgba(96,165,250,0.20)',
+              boxShadow: '0 0 24px rgba(59,130,246,0.12)'
             }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2 tracking-tight">Build your searchable source vault</h2>
-          <p className="text-sm text-slate-500 leading-relaxed mb-6 max-w-md mx-auto">
-            Upload PDFs, screenshots, notes, fee schedules, contracts, and research files. Source Vault will organize them for fast search and review.
+          <h2 className="text-lg font-semibold text-white mb-2 tracking-tight">Your files, organized and ready to share</h2>
+          <p className="text-sm text-slate-500 leading-relaxed mb-5 max-w-sm mx-auto">
+            Upload, preview, search, and share documents from one secure vault.
           </p>
-          <div className="flex items-center justify-center gap-3">
-            <button onClick={onUpload} className="btn-primary text-sm px-6 py-2.5">Upload Files</button>
+          <div className="flex items-center justify-center gap-2">
+            <button onClick={onUpload} className="btn-primary text-xs px-5 py-2">Upload Files</button>
             <button onClick={onCreateFolder}
-              className="text-sm px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/8 hover:border-white/15 transition-all">
+              className="glass-button text-xs px-4 py-2">
               Create Folder
             </button>
           </div>
         </div>
       </div>
 
-      {/* Onboarding cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Onboarding cards - floating glass tiles */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="onboarding-card">
           <div className="card-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-slate-200 mb-1">Upload documents</h3>
-          <p className="text-xs text-slate-500 leading-relaxed">Drag and drop PDFs, images, spreadsheets, and text files into organized folders.</p>
+          <h3 className="text-xs font-semibold text-slate-200 mb-1">Upload files</h3>
+          <p className="text-[11px] text-slate-500 leading-relaxed">Drag and drop PDFs, images, spreadsheets, documents, and text files.</p>
         </div>
 
         <div className="onboarding-card">
           <div className="card-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h3 className="text-xs font-semibold text-slate-200 mb-1">Organize folders</h3>
+          <p className="text-[11px] text-slate-500 leading-relaxed">Group files into shared folders so everything stays easy to find.</p>
+        </div>
+
+        <div className="onboarding-card">
+          <div className="card-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-slate-200 mb-1">Extract searchable content</h3>
-          <p className="text-xs text-slate-500 leading-relaxed">Search inside documents by content, filename, tags, and your own source notes.</p>
+          <h3 className="text-xs font-semibold text-slate-200 mb-1">Search and preview</h3>
+          <p className="text-[11px] text-slate-500 leading-relaxed">Find files instantly by name, content, tags, and notes, then preview in place.</p>
         </div>
 
         <div className="onboarding-card">
           <div className="card-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-slate-200 mb-1">Review summaries, tags, and source notes</h3>
-          <p className="text-xs text-slate-500 leading-relaxed">Add context, labels, and metadata so your research stays organized and reusable.</p>
+          <h3 className="text-xs font-semibold text-slate-200 mb-1">Share securely</h3>
+          <p className="text-[11px] text-slate-500 leading-relaxed">Share files with secure links and keep your team documents in one place.</p>
         </div>
       </div>
     </div>

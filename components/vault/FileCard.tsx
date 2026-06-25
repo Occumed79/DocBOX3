@@ -24,24 +24,13 @@ export function typeClass(t: string) {
   return map[t] || 't-other';
 }
 
-function typeGradient(t: string): string {
-  if (['png','jpg','jpeg'].includes(t))
-    return 'linear-gradient(135deg, rgba(34,197,94,0.18), rgba(16,185,129,0.12))';
-  if (t === 'pdf')
-    return 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(220,38,38,0.12))';
-  if (['docx','txt','html','htm'].includes(t))
-    return 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(37,99,235,0.12))';
-  if (['xlsx','csv'].includes(t))
-    return 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(6,182,212,0.12))';
-  return 'linear-gradient(135deg, rgba(100,116,139,0.18), rgba(71,85,105,0.12))';
-}
-
-function typeBorder(t: string): string {
-  if (['png','jpg','jpeg'].includes(t)) return 'rgba(34,197,94,0.25)';
-  if (t === 'pdf') return 'rgba(239,68,68,0.25)';
-  if (['docx','txt','html','htm'].includes(t)) return 'rgba(59,130,246,0.25)';
-  if (['xlsx','csv'].includes(t)) return 'rgba(16,185,129,0.25)';
-  return 'rgba(100,116,139,0.25)';
+function typeGlowClass(t: string): string {
+  if (['png','jpg','jpeg'].includes(t)) return 'ft-img';
+  if (t === 'pdf') return 'ft-pdf';
+  if (t === 'docx') return 'ft-docx';
+  if (['txt','html','htm'].includes(t)) return 'ft-txt';
+  if (['xlsx','csv'].includes(t)) return 'ft-xlsx';
+  return 'ft-other';
 }
 
 export function formatSize(bytes: number) {
@@ -97,28 +86,23 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
   return (
     <div
       className={`glass-card relative overflow-hidden cursor-pointer group fade-up ${selected ? 'selected' : ''}`}
-      style={{ padding: '14px 16px' }}
+      style={{ padding: '10px 12px' }}
       onClick={() => onSelect(file)}
     >
       {/* Selected left accent */}
       {selected && (
-        <div className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full"
-          style={{ background: 'linear-gradient(180deg, rgba(96,165,250,0.8), rgba(99,102,241,0.6))' }} />
+        <div className="absolute left-0 top-2 bottom-2 w-[1.5px] rounded-full"
+          style={{ background: 'linear-gradient(180deg, rgba(96,165,250,0.6), rgba(99,102,241,0.5))' }} />
       )}
       <div className="shim" />
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5">
 
         {/* Thumbnail */}
-        <div className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center"
-          style={{
-            background: typeGradient(file.file_type),
-            border: `1px solid ${typeBorder(file.file_type)}`,
-            boxShadow: `0 0 12px ${typeBorder(file.file_type).replace('0.25', '0.10')}`
-          }}
+        <div className={`file-type-glow w-10 h-10 shrink-0 ${typeGlowClass(file.file_type)}`}
           onClick={e => { e.stopPropagation(); onSelect(file); }}>
           {isImage && file.storage_url.startsWith('data:') ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover rounded-xl" />
+            <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover rounded-lg" />
           ) : (
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
           )}
@@ -130,21 +114,21 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
             <span className={`tbadge ${typeClass(file.file_type)} shrink-0 mt-0.5`}>{file.file_type.toUpperCase()}</span>
           </div>
 
-          <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-[10px] text-slate-600">{formatSize(file.size_bytes)}</span>
             <span className="text-[10px] text-slate-700">·</span>
             <span className="text-[10px] text-slate-600">{formatDate(file.upload_date)}</span>
             {searchMode && file.folder_name && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/6 border border-white/8 text-slate-500">
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 border border-white/8 text-slate-500">
                 {file.folder_name}
               </span>
             )}
           </div>
 
           {file.tags?.length > 0 && (
-            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+            <div className="flex gap-1 mt-1 flex-wrap">
               {file.tags.map(tag => (
-                <span key={tag} className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
                   {tag}
                 </span>
               ))}
@@ -153,23 +137,23 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
 
           {/* Search headline */}
           {file.headline && (
-            <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed line-clamp-2"
+            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2"
               dangerouslySetInnerHTML={{ __html: file.headline }} />
           )}
 
           {/* Notes */}
           {editNotes ? (
-            <div className="mt-2 flex gap-2" onClick={e => e.stopPropagation()}>
+            <div className="mt-1.5 flex gap-2" onClick={e => e.stopPropagation()}>
               <input autoFocus
-                className="flex-1 bg-white/6 border border-white/12 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-blue-500/40"
+                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-slate-200 outline-none focus:border-blue-500/40"
                 value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Add a note…"
                 onKeyDown={e => { if (e.key==='Enter') saveNotes(); if(e.key==='Escape') setEditNotes(false); }}
               />
-              <button onClick={saveNotes} className="btn-primary text-xs px-3 py-1.5">Save</button>
+              <button onClick={saveNotes} className="btn-primary text-[11px] px-2.5 py-1">Save</button>
             </div>
           ) : file.notes ? (
-            <p className="text-[11px] text-slate-500 mt-1.5 italic cursor-pointer hover:text-slate-300 transition-colors"
+            <p className="text-[11px] text-slate-500 mt-1 italic cursor-pointer hover:text-slate-300 transition-colors"
               onClick={e => { e.stopPropagation(); setEditNotes(true); }}>
               {file.notes}
             </p>
@@ -177,17 +161,17 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
         </div>
 
         {/* Action buttons — visible on hover */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           onClick={e => e.stopPropagation()}>
           <button title="Add note" onClick={() => setEditNotes(!editNotes)}
-            className="btn-ghost w-7 h-7 flex items-center justify-center text-xs rounded-lg">✎</button>
+            className="btn-ghost w-6 h-6 flex items-center justify-center text-xs rounded-lg">✎</button>
           <button title="Download"
             onClick={() => { const a=document.createElement('a'); a.href=file.storage_url; a.download=file.original_name; a.click(); }}
-            className="btn-ghost w-7 h-7 flex items-center justify-center text-xs rounded-lg">↓</button>
+            className="btn-ghost w-6 h-6 flex items-center justify-center text-xs rounded-lg">↓</button>
           <button title="Archive" onClick={archive}
-            className="btn-ghost w-7 h-7 flex items-center justify-center text-xs rounded-lg">▣</button>
+            className="btn-ghost w-6 h-6 flex items-center justify-center text-xs rounded-lg">▣</button>
           <button title="Delete" onClick={del}
-            className="w-7 h-7 flex items-center justify-center text-xs rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all">×</button>
+            className="w-6 h-6 flex items-center justify-center text-xs rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all">×</button>
         </div>
       </div>
     </div>
