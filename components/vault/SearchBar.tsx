@@ -3,9 +3,9 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { VaultFile } from './FileCard';
 
 const QUICK_SEARCHES = [
-  'Florida dental pricing',
-  'Q4 contracts',
-  'Provider screenshots',
+  'signed agreement',
+  'invoice package',
+  'training materials',
 ];
 
 interface Props {
@@ -78,7 +78,7 @@ export default function SearchBar({ onResults, onClear }: Props) {
           onChange={e => setQ(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder='Search your vault — "Florida dental pricing", "Q4 contracts", "provider screenshots"…'
+          placeholder='Search shared files — "signed agreement", "invoice package", "training materials"…'
           style={{ fontSize: 15 }}
         />
 
