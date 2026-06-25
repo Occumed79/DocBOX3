@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Source Vault',
-  description: 'Universal document storage and plain-English search vault',
+  description: 'General file sharing, document storage, and plain-English search vault',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
