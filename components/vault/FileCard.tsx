@@ -28,7 +28,7 @@ function typeGlowClass(t: string): string {
   if (['png','jpg','jpeg'].includes(t)) return 'ft-img';
   if (t === 'pdf') return 'ft-pdf';
   if (t === 'docx') return 'ft-docx';
-  if (['txt','html','htm'].includes(t)) return 'ft-txt';
+  if (['txt','html','htm','json'].includes(t)) return 'ft-txt';
   if (['xlsx','csv'].includes(t)) return 'ft-xlsx';
   return 'ft-other';
 }
@@ -53,11 +53,97 @@ interface Props {
   searchMode?: boolean;
 }
 
+function stripHtml(value?: string) {
+  return (value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function PreviewArtwork({ file }: { file: VaultFile }) {
+  const type = file.file_type.toLowerCase();
+  const isImage = ['png','jpg','jpeg'].includes(type);
+  const isPdf = type === 'pdf';
+  const isWeb = ['html','htm'].includes(type);
+  const isText = ['txt','csv','json'].includes(type);
+  const isSheet = ['xlsx','csv'].includes(type);
+  const isDoc = ['docx','txt'].includes(type);
+  const summary = stripHtml(file.headline) || file.notes || file.original_name;
+
+  if (isImage) {
+    return (
+      <div className="file-preview-art file-preview-image">
+        <img src={file.storage_url} alt={file.name} />
+      </div>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <div className="file-preview-art file-preview-pdf">
+        <div className="preview-page">
+          <div className="preview-page-top" />
+          <div className="preview-lines">
+            <span style={{ width: '72%' }} />
+            <span style={{ width: '92%' }} />
+            <span style={{ width: '84%' }} />
+            <span style={{ width: '58%' }} />
+          </div>
+          <div className="preview-pdf-stamp">PDF</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isWeb) {
+    return (
+      <div className="file-preview-art file-preview-web">
+        <div className="browser-dots"><span /><span /><span /></div>
+        <div className="web-hero" />
+        <div className="web-lines">
+          <span style={{ width: '78%' }} />
+          <span style={{ width: '54%' }} />
+        </div>
+        <p>{summary || 'Saved page preview'}</p>
+      </div>
+    );
+  }
+
+  if (isSheet) {
+    return (
+      <div className="file-preview-art file-preview-sheet">
+        <div className="sheet-grid">
+          {Array.from({ length: 24 }).map((_, i) => <span key={i} />)}
+        </div>
+        <div className="sheet-badge">SHEET</div>
+      </div>
+    );
+  }
+
+  if (isText || isDoc) {
+    return (
+      <div className="file-preview-art file-preview-doc">
+        <div className="doc-page">
+          <div className="doc-title" />
+          <div className="preview-lines">
+            <span style={{ width: '88%' }} />
+            <span style={{ width: '76%' }} />
+            <span style={{ width: '94%' }} />
+            <span style={{ width: '62%' }} />
+          </div>
+          <p>{summary}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`file-preview-art ${typeGlowClass(type)}`}>
+      <span className={`tbadge ${typeClass(type)}`}>{type.toUpperCase()}</span>
+    </div>
+  );
+}
+
 export default function FileCard({ file, selected, onSelect, onUpdate, onDelete, searchMode }: Props) {
   const [editNotes, setEditNotes] = useState(false);
   const [notes, setNotes] = useState(file.notes || '');
-
-  const isImage = ['png','jpg','jpeg'].includes(file.file_type);
 
   const saveNotes = async () => {
     const res = await fetch('/api/files', {
@@ -65,114 +151,86 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: file.id, notes }),
     });
-    if (res.ok) { const u = await res.json(); onUpdate({ ...file, notes: u.notes }); }
+    if (res.ok) {
+      const updated = await res.json();
+      onUpdate({ ...file, notes: updated.notes });
+    }
     setEditNotes(false);
   };
 
   const archive = async () => {
     if (!confirm(`Archive "${file.name}"?`)) return;
-    await fetch('/api/files', { method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: file.id, is_archived: true }) });
+    await fetch('/api/files', {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: file.id, is_archived: true }),
+    });
     onDelete(file.id);
   };
 
-  const del = async () => {
-    if (!confirm(`Permanently delete "${file.name}"?`)) return;
-    await fetch('/api/files', { method:'DELETE', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: file.id }) });
+  const removeFile = async () => {
+    if (!confirm(`Delete "${file.name}"?`)) return;
+    await fetch('/api/files', {
+      method:'DELETE',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id: file.id }),
+    });
     onDelete(file.id);
   };
+
+  const headline = stripHtml(file.headline);
 
   return (
-    <div
-      className={`glass-card relative overflow-hidden cursor-pointer group fade-up ${selected ? 'selected' : ''}`}
-      style={{ padding: '10px 12px' }}
-      onClick={() => onSelect(file)}
-    >
-      {/* Selected left accent */}
-      {selected && (
-        <div className="absolute left-0 top-2 bottom-2 w-[1.5px] rounded-full"
-          style={{ background: 'linear-gradient(180deg, rgba(91,154,255,0.55), rgba(139,92,246,0.45))' }} />
-      )}
+    <div className={`glass-card file-preview-card relative cursor-pointer group fade-up ${selected ? 'selected' : ''}`} onClick={() => onSelect(file)}>
+      {selected && <div className="file-selected-glow" />}
       <div className="shim" />
-      <div className="flex items-start gap-2.5">
 
-        {/* Thumbnail */}
-        <div className={`file-type-glow w-10 h-10 shrink-0 ${typeGlowClass(file.file_type)}`}
-          onClick={e => { e.stopPropagation(); onSelect(file); }}>
-          {isImage && file.storage_url.startsWith('data:') ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={file.storage_url} alt={file.name} className="w-full h-full object-cover rounded-lg" />
-          ) : (
-            <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
-          )}
+      <div className="file-card-actions" onClick={event => event.stopPropagation()}>
+        <button title="Add note" onClick={() => setEditNotes(!editNotes)}>Note</button>
+        <a title="Download" href={file.storage_url} download={file.original_name}>Download</a>
+        <button title="Archive" onClick={archive}>Archive</button>
+        <button title="Delete" onClick={removeFile}>Delete</button>
+      </div>
+
+      <PreviewArtwork file={file} />
+
+      <div className="file-card-body">
+        <div className="file-card-title-row">
+          <p className="file-card-title">{file.name}</p>
+          <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2">
-            <p className="text-sm font-semibold text-white/90 leading-tight truncate flex-1">{file.name}</p>
-            <span className={`tbadge ${typeClass(file.file_type)} shrink-0 mt-0.5`}>{file.file_type.toUpperCase()}</span>
+        <div className="file-card-meta">
+          <span>{formatSize(file.size_bytes)}</span>
+          <span>{formatDate(file.upload_date)}</span>
+          {searchMode && file.folder_name && <span>{file.folder_name}</span>}
+        </div>
+
+        {file.tags?.length > 0 && (
+          <div className="file-card-tags">
+            {file.tags.slice(0, 3).map(tag => <span key={tag}>{tag}</span>)}
           </div>
+        )}
 
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[10px] text-slate-500">{formatSize(file.size_bytes)}</span>
-            <span className="text-[10px] text-slate-600">·</span>
-            <span className="text-[10px] text-slate-500">{formatDate(file.upload_date)}</span>
-            {searchMode && file.folder_name && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 border border-white/8 text-slate-500">
-                {file.folder_name}
-              </span>
-            )}
+        {headline && <p className="file-card-summary">{headline}</p>}
+
+        {editNotes ? (
+          <div className="file-note-editor" onClick={event => event.stopPropagation()}>
+            <input
+              autoFocus
+              value={notes}
+              onChange={event => setNotes(event.target.value)}
+              placeholder="Add a note..."
+              onKeyDown={event => {
+                if (event.key === 'Enter') saveNotes();
+                if (event.key === 'Escape') setEditNotes(false);
+              }}
+            />
+            <button onClick={saveNotes}>Save</button>
           </div>
-
-          {file.tags?.length > 0 && (
-            <div className="flex gap-1 mt-1 flex-wrap">
-              {file.tags.map(tag => (
-                <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Search headline */}
-          {file.headline && (
-            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2"
-              dangerouslySetInnerHTML={{ __html: file.headline }} />
-          )}
-
-          {/* Notes */}
-          {editNotes ? (
-            <div className="mt-1.5 flex gap-2" onClick={e => e.stopPropagation()}>
-              <input autoFocus
-                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-slate-200 outline-none focus:border-blue-500/40"
-                value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Add a note…"
-                onKeyDown={e => { if (e.key==='Enter') saveNotes(); if(e.key==='Escape') setEditNotes(false); }}
-              />
-              <button onClick={saveNotes} className="btn-primary text-[11px] px-2.5 py-1">Save</button>
-            </div>
-          ) : file.notes ? (
-            <p className="text-[11px] text-slate-500 mt-1 italic cursor-pointer hover:text-slate-300 transition-colors"
-              onClick={e => { e.stopPropagation(); setEditNotes(true); }}>
-              {file.notes}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Action buttons — visible on hover */}
-        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          onClick={e => e.stopPropagation()}>
-          <button title="Add note" onClick={() => setEditNotes(!editNotes)}
-            className="btn-ghost w-6 h-6 flex items-center justify-center text-xs rounded-lg">✎</button>
-          <button title="Download"
-            onClick={() => { const a=document.createElement('a'); a.href=file.storage_url; a.download=file.original_name; a.click(); }}
-            className="btn-ghost w-6 h-6 flex items-center justify-center text-xs rounded-lg">↓</button>
-          <button title="Archive" onClick={archive}
-            className="btn-ghost w-6 h-6 flex items-center justify-center text-xs rounded-lg">▣</button>
-          <button title="Delete" onClick={del}
-            className="w-6 h-6 flex items-center justify-center text-xs rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all">×</button>
-        </div>
+        ) : file.notes ? (
+          <p className="file-card-notes" onClick={event => { event.stopPropagation(); setEditNotes(true); }}>{file.notes}</p>
+        ) : null}
       </div>
     </div>
   );
