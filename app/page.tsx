@@ -15,7 +15,6 @@ export interface Folder {
 
 type NavView = 'all' | 'archive';
 
-// ── helpers ────────────────────────────────────────────────────────────────
 function FolderIcon({ color }: { color: string }) {
   return (
     <svg width="13" height="12" viewBox="0 0 20 16" fill="none">
@@ -25,25 +24,21 @@ function FolderIcon({ color }: { color: string }) {
   );
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [folders, setFolders]       = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
-  const [navView, setNavView]       = useState<NavView>('all');
-  const [files, setFiles]           = useState<VaultFile[]>([]);
-  const [loading, setLoading]       = useState(false);
+  const [navView, setNavView] = useState<NavView>('all');
+  const [files, setFiles] = useState<VaultFile[]>([]);
+  const [loading, setLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<VaultFile[]>([]);
-  const [searchQuery, setSearchQuery]     = useState('');
-  const [isSearching, setIsSearching]     = useState(false);
-  const [selectedFile, setSelectedFile]   = useState<VaultFile | null>(null);
-  const [showUpload, setShowUpload]       = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [scrollY, setScrollY] = useState(0);
-  const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Scroll-driven ambient effects ───────────────────────────────────
   useEffect(() => {
     const root = document.documentElement;
     const list = document.querySelector('.file-list-scroll') as HTMLElement | null;
@@ -53,21 +48,21 @@ export default function Home() {
       const y = list ? list.scrollTop : window.scrollY;
       const max = list ? (list.scrollHeight - list.clientHeight) : (document.documentElement.scrollHeight - window.innerHeight);
       const progress = max > 0 ? y / max : 0;
-      setScrollY(y);
-      root.style.setProperty('--scroll-y', y.toString());
-      root.style.setProperty('--scroll-x', '0');
       root.style.setProperty('--scroll-progress', Math.min(progress, 1).toString());
-      setIsScrolling(true);
+      root.style.setProperty('--scroll-y', String(y));
+      document.body.classList.add('is-scrolling');
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => setIsScrolling(false), 150);
+      scrollTimeoutRef.current = setTimeout(() => document.body.classList.remove('is-scrolling'), 180);
     };
 
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
-    return () => { scrollEl.removeEventListener('scroll', onScroll); };
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, []);
 
-  // ── Reveal-on-scroll for cards ────────────────────────────────────────
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -79,48 +74,54 @@ export default function Home() {
     return () => observer.disconnect();
   }, [files, searchResults, isSearching, showUpload]);
 
-  // ── Load folders ──────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
-    const res = await fetch('/api/folders');
-    setFolders(Array.isArray(await res.json()) ? await res.clone().json() : []);
+    try {
+      const res = await fetch('/api/folders');
+      const data = await res.json();
+      setFolders(Array.isArray(data) ? data : []);
+    } catch {
+      setFolders([]);
+    }
   }, []);
 
   useEffect(() => { loadFolders(); }, [loadFolders]);
 
-  // ── Load files ────────────────────────────────────────────────────────
   const loadFiles = useCallback(async () => {
     if (isSearching) return;
     setLoading(true);
     const archived = navView === 'archive';
     let url = `/api/files?archived=${archived}`;
-    if (!archived) {
-      url += activeFolder ? `&folder_id=${activeFolder}` : `&folder_id=null`;
-    }
+    if (!archived) url += activeFolder ? `&folder_id=${activeFolder}` : `&folder_id=null`;
     try {
       const res = await fetch(url);
       const data = await res.json();
       setFiles(Array.isArray(data) ? data : []);
-    } catch { setFiles([]); }
+    } catch {
+      setFiles([]);
+    }
     setLoading(false);
   }, [isSearching, navView, activeFolder]);
 
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
-  // Reload folders after any file-count-changing action
   const reloadFolderCounts = useCallback(async () => {
-    const res = await fetch('/api/folders');
-    const data = await res.json();
-    setFolders(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetch('/api/folders');
+      const data = await res.json();
+      setFolders(Array.isArray(data) ? data : []);
+    } catch {
+      setFolders([]);
+    }
   }, []);
 
-  // ── Folder ops ────────────────────────────────────────────────────────
   const createFolder = async () => {
     if (!newFolderName.trim()) return;
     await fetch('/api/folders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newFolderName.trim() }),
     });
-    setNewFolderName(''); setShowNewFolder(false);
+    setNewFolderName('');
+    setShowNewFolder(false);
     loadFolders();
   };
 
@@ -128,10 +129,10 @@ export default function Home() {
     if (!confirm('Delete this folder? Files inside will be moved to root.')) return;
     await fetch('/api/folders', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) });
     if (activeFolder === id) setActiveFolder(null);
-    loadFolders(); loadFiles();
+    loadFolders();
+    loadFiles();
   };
 
-  // ── File ops ──────────────────────────────────────────────────────────
   const handleUploaded = (f: VaultFile) => {
     setFiles(prev => [f, ...prev]);
     reloadFolderCounts();
@@ -152,178 +153,144 @@ export default function Home() {
   };
 
   const displayFiles = isSearching ? searchResults : files;
-
-  // ── Root folders only for pills ──────────────────────────────────────
   const rootFolders = folders.filter(f => !f.parent_id);
+  const sectionTitle = isSearching
+    ? `Results for "${searchQuery}"`
+    : activeFolder
+      ? folders.find(f => f.id === activeFolder)?.name ?? 'Folder'
+      : navView === 'archive'
+        ? 'Archive'
+        : 'All Files';
 
   return (
-    <div className={`relative z-10 flex flex-col h-screen overflow-hidden ${scrollY > 20 ? 'header-scrolled' : ''} ${isScrolling ? 'scrolling' : ''}`}>
+    <div className="relative z-10 flex h-screen flex-col overflow-hidden px-4 pb-4">
       <div className="scroll-progress" />
-      <div className="vault-ambient" />
 
-      {/* ── TOP HEADER ─────────────────────────────────────────────────── */}
-      <header className="relative z-30 shrink-0 flex flex-col items-center pt-6 pb-8 px-6 transition-all duration-300">
-        {/* Floating command bar */}
-        <div className="floating-command-bar px-3 py-2 mb-8">
-          <div className="shim" />
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2.5 pl-2 pr-3">
-              <div className="logo-mark w-7 h-7 rounded-lg flex items-center justify-center font-bold text-white text-[10px] shrink-0 relative overflow-hidden">
-                <div className="shim" />
-                SV
+      <header className="relative z-30 shrink-0 px-2 pb-5 pt-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center">
+          <div className="floating-command-bar mb-6">
+            <div className="shim" />
+            <div className="relative z-10 flex items-center gap-2">
+              <div className="flex items-center gap-2.5 pl-2 pr-3">
+                <div className="logo-mark flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl text-[10px] font-bold text-white">
+                  <div className="shim" />
+                  <span className="relative z-10">SV</span>
+                </div>
+                <div className="leading-tight">
+                  <p className="text-[13px] font-semibold tracking-tight text-white">Source Vault</p>
+                  <p className="text-[10px] text-slate-400/70">File sharing workspace</p>
+                </div>
               </div>
-              <span className="text-[13px] font-semibold text-white tracking-tight">Source Vault</span>
-            </div>
 
-            <div className="w-px h-4 bg-white/10" />
+              <div className="mx-1 h-5 w-px bg-white/10" />
 
-            <div className="flex items-center">
               {(['all','archive'] as NavView[]).map(v => (
                 <button key={v} onClick={() => { setNavView(v); setIsSearching(false); setActiveFolder(null); }}
                   className={`nav-item capitalize ${navView === v && !isSearching ? 'active' : ''}`}>
                   {v === 'all' ? 'All Files' : 'Archive'}
                 </button>
               ))}
-            </div>
 
-            <button onClick={() => setShowUpload(!showUpload)}
-              className="btn-primary text-[11px] px-3.5 py-1.5 ml-1 flex items-center gap-1.5">
-              {showUpload ? '× Close' : (
-                <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>Upload</>
-              )}
-            </button>
+              <button onClick={() => setShowUpload(!showUpload)}
+                className="btn-primary ml-1 flex items-center gap-1.5 px-4 py-2 text-[11px]">
+                {showUpload ? 'Close' : (
+                  <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Upload</>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* ── SEARCH HERO ─────────────────────────────────────────────── */}
-        <div className="w-full max-w-2xl">
-          <SearchBar
-            onResults={(results, q) => { setSearchResults(results); setSearchQuery(q); setIsSearching(true); }}
-            onClear={() => { setIsSearching(false); setSearchQuery(''); }}
-          />
-        </div>
+          <div className="apple-hero-card fade-up">
+            <div className="apple-eyebrow">Liquid glass file vault</div>
+            <h1 className="apple-title">Files that feel effortless.</h1>
+            <p className="apple-subtitle">Upload, preview, search, organize, and share documents from a luminous workspace designed to stay calm even when the file pile gets messy.</p>
+          </div>
 
-        {/* ── FOLDER PILLS ────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 mt-5 overflow-x-auto pb-1 max-w-full" style={{ scrollbarWidth: 'none' }}>
-          <button
-            onClick={() => { setActiveFolder(null); setNavView('all'); setIsSearching(false); }}
-            className={`folder-pill ${!activeFolder && !isSearching && navView==='all' ? 'active' : ''}`}>
-            All
-          </button>
+          <div className="w-full max-w-3xl fade-up stagger-2">
+            <SearchBar
+              onResults={(results, q) => { setSearchResults(results); setSearchQuery(q); setIsSearching(true); }}
+              onClear={() => { setIsSearching(false); setSearchQuery(''); }}
+            />
+          </div>
 
-          {rootFolders.map(folder => (
-            <button key={folder.id}
-              onClick={() => { setActiveFolder(folder.id); setNavView('all'); setIsSearching(false); }}
-              className={`folder-pill flex items-center gap-1.5 ${activeFolder === folder.id ? 'active' : ''}`}>
-              <FolderIcon color={folder.color} />
-              {folder.name}
-              {folder.file_count > 0 && (
-                <span className="text-[9px] opacity-70 ml-0.5">{folder.file_count}</span>
-              )}
+          <div className="mt-5 flex max-w-full items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            <button onClick={() => { setActiveFolder(null); setNavView('all'); setIsSearching(false); }}
+              className={`folder-pill ${!activeFolder && !isSearching && navView === 'all' ? 'active' : ''}`}>
+              All
             </button>
-          ))}
 
-          {showNewFolder ? (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <input autoFocus
-                className="bg-white/[0.04] border border-white/8 rounded-full px-3 py-1 text-[11px] text-slate-200 outline-none focus:border-blue-400/40 w-32"
-                placeholder="Folder name…"
-                value={newFolderName}
-                onChange={e => setNewFolderName(e.target.value)}
-                onKeyDown={e => { if (e.key==='Enter') createFolder(); if (e.key==='Escape') setShowNewFolder(false); }}
-              />
-              <button onClick={createFolder} className="folder-pill active text-[10px] px-2.5">✓</button>
-            </div>
-          ) : (
-            <button onClick={() => setShowNewFolder(true)}
-              className="folder-pill text-slate-500 hover:text-blue-400 shrink-0">
-              + New Folder
-            </button>
-          )}
+            {rootFolders.map(folder => (
+              <button key={folder.id}
+                onClick={() => { setActiveFolder(folder.id); setNavView('all'); setIsSearching(false); }}
+                className={`folder-pill flex items-center gap-1.5 ${activeFolder === folder.id ? 'active' : ''}`}>
+                <FolderIcon color={folder.color} />
+                {folder.name}
+                {folder.file_count > 0 && <span className="ml-0.5 text-[9px] opacity-70">{folder.file_count}</span>}
+              </button>
+            ))}
+
+            {showNewFolder ? (
+              <div className="flex shrink-0 items-center gap-1.5">
+                <input autoFocus
+                  className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] text-slate-200 outline-none focus:border-sky-300/40"
+                  placeholder="Folder name…"
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') setShowNewFolder(false); }}
+                />
+                <button onClick={createFolder} className="folder-pill active px-2.5 text-[10px]">Create</button>
+              </div>
+            ) : (
+              <button onClick={() => setShowNewFolder(true)} className="folder-pill shrink-0 text-slate-400 hover:text-white">+ New Folder</button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* ── UPLOAD DRAWER ────────────────────────────────────────────────── */}
       {showUpload && (
-        <div className="relative z-20 shrink-0 px-4 pb-4 pt-1 drawer-enter">
-          <div className="liquid-panel px-4 py-4">
+        <div className="drawer-enter relative z-20 shrink-0 px-2 pb-4 pt-1">
+          <div className="liquid-panel mx-auto max-w-5xl rounded-[30px] px-4 py-4">
             <DropZone folderId={activeFolder} onUploaded={handleUploaded} onClose={() => setShowUpload(false)} />
             {activeFolder && (
-              <p className="text-[10px] text-slate-500 mt-2 pl-1">
-                Uploading into: <span className="text-slate-300">{folders.find(f=>f.id===activeFolder)?.name}</span>
-              </p>
+              <p className="mt-2 pl-1 text-[10px] text-slate-500">Uploading into: <span className="text-slate-300">{folders.find(f => f.id === activeFolder)?.name}</span></p>
             )}
           </div>
         </div>
       )}
 
-      {/* ── MAIN CONTENT AREA ─────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden px-4 pb-4">
-
-        {/* ── FILE LIST ───────────────────────────────────────────────── */}
-        <div className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ${selectedFile ? 'max-w-[56%]' : ''}`}>
-
-          {/* Section label */}
-          <div className="shrink-0 px-6 py-4 flex items-center justify-between">
+      <div className="content-stage mx-auto flex w-full max-w-7xl flex-1 overflow-hidden">
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden transition-all duration-300 ${selectedFile ? 'max-w-[56%]' : ''}`}>
+          <div className="section-heading flex shrink-0 items-center justify-between px-6 py-4">
             <div>
-              <span className="text-sm font-semibold text-white/90">
-                {isSearching ? `Results for "${searchQuery}"` : activeFolder ? folders.find(f=>f.id===activeFolder)?.name : navView === 'archive' ? 'Archive' : 'All Files'}
-              </span>
-              <span className="text-[11px] text-slate-500 ml-2">
-                {displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}
-              </span>
+              <span className="text-sm font-semibold text-white/90">{sectionTitle}</span>
+              <span className="ml-2 text-[11px] text-slate-500">{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span>
             </div>
             {selectedFile && (
-              <button onClick={() => setSelectedFile(null)}
-                className="text-[11px] text-slate-500 hover:text-slate-200 transition-colors">
-                Close preview ×
-              </button>
+              <button onClick={() => setSelectedFile(null)} className="text-[11px] text-slate-500 transition-colors hover:text-slate-200">Close preview</button>
             )}
           </div>
 
-          {/* Files */}
-          <div className="file-list-scroll flex-1 overflow-y-auto px-6 py-2 space-y-3">
+          <div className="file-list-scroll flex-1 space-y-3 overflow-y-auto px-6 pb-6 pt-2">
             {loading ? (
-              [...Array(6)].map((_,i) => (
-                <div key={i} className="glass-card h-16 animate-pulse" style={{ opacity: 1 - i*0.15 }} />
-              ))
+              [...Array(6)].map((_, i) => <div key={i} className="file-glass-strip h-16 animate-pulse" style={{ opacity: 1 - i * 0.11 }} />)
             ) : displayFiles.length === 0 ? (
-              <EmptyState isSearching={isSearching} searchQuery={searchQuery} navView={navView}
-                onUpload={() => setShowUpload(true)} onCreateFolder={() => setShowNewFolder(true)} />
+              <EmptyState isSearching={isSearching} searchQuery={searchQuery} navView={navView} onUpload={() => setShowUpload(true)} onCreateFolder={() => setShowNewFolder(true)} />
             ) : (
               displayFiles.map((f, i) => (
                 <div key={f.id} className={`scroll-reveal stagger-${Math.min((i % 6) + 1, 6)}`}>
-                  <FileCard
-                    file={f}
-                    selected={selectedFile?.id === f.id}
-                    onSelect={setSelectedFile}
-                    onUpdate={handleUpdate}
-                    onDelete={handleDelete}
-                    searchMode={isSearching}
-                  />
+                  <FileCard file={f} selected={selectedFile?.id === f.id} onSelect={setSelectedFile} onUpdate={handleUpdate} onDelete={handleDelete} searchMode={isSearching} />
                 </div>
               ))
             )}
           </div>
         </div>
 
-        {/* ── PREVIEW PANE ────────────────────────────────────────────── */}
-        {selectedFile && (
-          <PreviewPane
-            file={selectedFile}
-            onClose={() => setSelectedFile(null)}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
-        )}
+        {selectedFile && <PreviewPane file={selectedFile} onClose={() => setSelectedFile(null)} onUpdate={handleUpdate} onDelete={handleDelete} />}
       </div>
     </div>
   );
 }
 
-// ── Preview Pane (right side) ──────────────────────────────────────────────
 function PreviewPane({ file, onClose, onUpdate, onDelete }: {
   file: VaultFile;
   onClose: () => void;
@@ -336,297 +303,184 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
   const [notes, setNotes] = useState(file.notes || '');
 
   useEffect(() => {
-    setUrl(null); setEditNotes(false); setNotes(file.notes || '');
-    fetch(`/api/preview?id=${file.id}`).then(r=>r.json()).then(d=>setUrl(d.url));
+    setUrl(null);
+    setEditNotes(false);
+    setNotes(file.notes || '');
+    fetch(`/api/preview?id=${file.id}`).then(r => r.json()).then(d => setUrl(d.url));
   }, [file.id, file.notes]);
 
   const isImage = ['png','jpg','jpeg'].includes(file.file_type);
-  const isPdf   = file.file_type === 'pdf';
-  const isText  = ['txt','csv','html','htm'].includes(file.file_type);
+  const isPdf = file.file_type === 'pdf';
+  const isText = ['txt','csv','html','htm'].includes(file.file_type);
 
   const saveNotes = async () => {
-    const res = await fetch('/api/files', { method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: file.id, notes }) });
-    if (res.ok) { const u = await res.json(); onUpdate({ ...file, notes: u.notes }); }
+    const res = await fetch('/api/files', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: file.id, notes }) });
+    if (res.ok) {
+      const u = await res.json();
+      onUpdate({ ...file, notes: u.notes });
+    }
     setEditNotes(false);
   };
 
   const del = async () => {
     if (!confirm(`Permanently delete "${file.name}"?`)) return;
-    await fetch('/api/files', { method:'DELETE', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: file.id }) });
+    await fetch('/api/files', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: file.id }) });
     onDelete(file.id);
   };
 
   return (
     <>
-      <div className="preview-pane flex flex-col overflow-hidden rounded-r-2xl" style={{ width: '44%', minWidth: 320 }}>
-        {/* Pane header */}
-        <div className="px-5 py-4 shrink-0 border-b border-white/5">
-          <div className="flex items-start justify-between gap-3 mb-2">
+      <div className="preview-pane ml-4 flex flex-col overflow-hidden" style={{ width: '44%', minWidth: 340 }}>
+        <div className="shrink-0 border-b border-white/5 px-5 py-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white/90 truncate leading-snug">{file.name}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">{file.original_name}</p>
+              <p className="truncate text-sm font-semibold leading-snug text-white/95">{file.name}</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">{file.original_name}</p>
             </div>
-            <button onClick={onClose} className="btn-ghost w-7 h-7 flex items-center justify-center text-sm shrink-0">×</button>
+            <button onClick={onClose} className="btn-ghost flex h-8 w-8 shrink-0 items-center justify-center text-sm">×</button>
           </div>
 
-          {/* Meta */}
-          <div className="flex items-center gap-2 flex-wrap mb-3">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
             <span className="text-[10px] text-slate-500">{formatSize(file.size_bytes)}</span>
             <span className="text-[10px] text-slate-500">{formatDate(file.upload_date)}</span>
           </div>
 
-          {/* Action row */}
           <div className="flex gap-2">
-            {url && (
-              <a href={url} download={file.original_name}
-                className="btn-primary text-[11px] px-3 py-1.5 flex items-center gap-1.5">↓ Download</a>
-            )}
-            <button onClick={() => setShowFull(true)}
-              className="btn-ghost text-[11px] px-3 py-1.5">⛶ Full view</button>
-            <button onClick={del}
-              className="text-[11px] px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all">Delete</button>
+            {url && <a href={url} download={file.original_name} className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-[11px]">Download</a>}
+            <button onClick={() => setShowFull(true)} className="btn-ghost px-3 py-1.5 text-[11px]">Full view</button>
+            <button onClick={del} className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1.5 text-[11px] text-red-300 transition-all hover:bg-red-500/20">Delete</button>
           </div>
         </div>
 
-        {/* Scrollable inspector content */}
-        <div className="flex-1 overflow-y-auto min-h-0 space-y-3 p-4">
-          {/* Preview */}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <div className="inspector-card">
-            <div className="inspector-card-title">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-              </svg>
-              Preview
-            </div>
+            <div className="inspector-card-title">Preview</div>
             {!url ? (
-              <div className="flex items-center justify-center h-40 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              </div>
+              <div className="flex h-40 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]"><div className="h-6 w-6 animate-spin rounded-full border-2 border-sky-300 border-t-transparent" /></div>
             ) : isImage ? (
-              <div className="flex items-center justify-center p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={file.name}
-                  className="max-w-full rounded-lg object-contain shadow-xl cursor-zoom-in"
-                  onClick={() => setShowFull(true)} />
+              <div className="flex items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03] p-2">
+                <img src={url} alt={file.name} className="max-w-full cursor-zoom-in rounded-xl object-contain shadow-2xl" onClick={() => setShowFull(true)} />
               </div>
             ) : isPdf ? (
-              <iframe src={url} className="w-full rounded-xl" style={{ height: 320, border: 'none', background: '#11131f' }} title={file.name} />
+              <iframe src={url} className="w-full rounded-2xl" style={{ height: 320, border: 'none', background: '#11131f' }} title={file.name} />
             ) : isText ? (
-              <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden">
-                <InlineText url={url} />
-              </div>
+              <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03]"><InlineText url={url} /></div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 gap-4 px-6 text-center rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="text-4xl opacity-30">📄</div>
-                <p className="text-slate-400 text-sm">No preview for .{file.file_type}</p>
-                {url && (
-                  <a href={url} download={file.original_name} className="btn-primary text-sm px-4 py-2">Download</a>
-                )}
+              <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-6 py-12 text-center">
+                <p className="text-sm text-slate-400">Preview not available for .{file.file_type}</p>
+                {url && <a href={url} download={file.original_name} className="btn-primary px-4 py-2 text-sm">Download</a>}
               </div>
             )}
           </div>
 
-          {/* File Details */}
           <div className="inspector-card">
-            <div className="inspector-card-title">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
-              </svg>
-              File Details
-            </div>
+            <div className="inspector-card-title">File Details</div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Type</p>
-                <p className="text-xs text-slate-300">{file.file_type.toUpperCase()}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Size</p>
-                <p className="text-xs text-slate-300">{formatSize(file.size_bytes)}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Uploaded</p>
-                <p className="text-xs text-slate-300">{formatDate(file.upload_date)}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Folder</p>
-                <p className="text-xs text-slate-300 truncate">{file.folder_name || 'Root'}</p>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 col-span-2">
-                <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Original name</p>
-                <p className="text-xs text-slate-300 truncate">{file.original_name}</p>
-              </div>
+              <Detail label="Type" value={file.file_type.toUpperCase()} />
+              <Detail label="Size" value={formatSize(file.size_bytes)} />
+              <Detail label="Uploaded" value={formatDate(file.upload_date)} />
+              <Detail label="Folder" value={file.folder_name || 'Root'} />
+              <div className="col-span-2"><Detail label="Original name" value={file.original_name} /></div>
             </div>
           </div>
 
-          {/* Tags */}
           <div className="inspector-card">
-            <div className="inspector-card-title">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
-              </svg>
-              Tags
-            </div>
+            <div className="inspector-card-title">Tags</div>
             {file.tags?.length > 0 ? (
-              <div className="flex gap-1.5 flex-wrap">
-                {file.tags.map(tag => (
-                  <span key={tag} className="text-[10px] px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500 italic">No tags yet</p>
-            )}
+              <div className="flex flex-wrap gap-1.5">{file.tags.map(tag => <span key={tag} className="rounded-full border border-sky-300/20 bg-sky-400/10 px-2.5 py-1 text-[10px] text-sky-200">{tag}</span>)}</div>
+            ) : <p className="text-xs italic text-slate-500">No tags yet</p>}
           </div>
 
-          {/* Notes */}
           <div className="inspector-card">
-            <div className="flex items-center justify-between mb-2">
-              <div className="inspector-card-title !mb-0">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-                Notes
-              </div>
-              {!editNotes && (
-                <button onClick={() => setEditNotes(true)}
-                  className="text-[10px] text-slate-500 hover:text-blue-400 transition-colors">
-                  {file.notes ? 'Edit' : '+ Add'}
-                </button>
-              )}
+            <div className="mb-2 flex items-center justify-between">
+              <div className="inspector-card-title !mb-0">Notes</div>
+              {!editNotes && <button onClick={() => setEditNotes(true)} className="text-[10px] text-slate-500 transition-colors hover:text-sky-300">{file.notes ? 'Edit' : '+ Add'}</button>}
             </div>
             {editNotes ? (
               <div className="space-y-2">
-                <textarea
-                  autoFocus rows={3}
-                  className="w-full bg-white/[0.06] border border-white/[0.12] rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-blue-500/40 resize-none"
-                  value={notes} onChange={e => setNotes(e.target.value)}
-                  placeholder="Add notes or context for this file…"
-                />
-                <div className="flex gap-2">
-                  <button onClick={saveNotes} className="btn-primary text-xs px-3 py-1.5">Save</button>
-                  <button onClick={() => setEditNotes(false)} className="btn-ghost text-xs px-3 py-1.5">Cancel</button>
-                </div>
+                <textarea autoFocus rows={3} className="w-full resize-none rounded-2xl border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-sky-300/40" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add notes or context for this file…" />
+                <div className="flex gap-2"><button onClick={saveNotes} className="btn-primary px-3 py-1.5 text-xs">Save</button><button onClick={() => setEditNotes(false)} className="btn-ghost px-3 py-1.5 text-xs">Cancel</button></div>
               </div>
             ) : (
-              <p className="text-xs text-slate-500 leading-relaxed cursor-pointer hover:text-slate-300 transition-colors"
-                onClick={() => setEditNotes(true)}>
-                {file.notes || <span className="italic opacity-50">No notes yet. Click to add context.</span>}
-              </p>
+              <p className="cursor-pointer text-xs leading-relaxed text-slate-500 transition-colors hover:text-slate-300" onClick={() => setEditNotes(true)}>{file.notes || <span className="italic opacity-50">No notes yet. Click to add context.</span>}</p>
             )}
           </div>
         </div>
       </div>
-
-      {/* Full-screen modal */}
       {showFull && <FilePreviewModal file={file} onClose={() => setShowFull(false)} />}
     </>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.035] px-3 py-2">
+      <p className="mb-0.5 text-[9px] uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="truncate text-xs text-slate-300">{value}</p>
+    </div>
   );
 }
 
 function InlineText({ url }: { url: string }) {
   const [text, setText] = useState('');
   useEffect(() => {
-    if (url.startsWith('data:')) { try { setText(atob(url.split(',')[1])); } catch { setText(''); } }
-    else fetch(url).then(r=>r.text()).then(setText).catch(()=>{});
+    if (url.startsWith('data:')) {
+      try { setText(atob(url.split(',')[1])); } catch { setText(''); }
+    } else fetch(url).then(r => r.text()).then(setText).catch(() => {});
   }, [url]);
-  return (
-    <pre className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed font-mono p-5 overflow-auto h-full">
-      {text || <span className="text-slate-600 animate-pulse">Loading…</span>}
-    </pre>
-  );
+  return <pre className="h-full overflow-auto whitespace-pre-wrap p-5 font-mono text-xs leading-relaxed text-slate-300">{text || <span className="animate-pulse text-slate-600">Loading…</span>}</pre>;
 }
 
 function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolder }:
   { isSearching: boolean; searchQuery: string; navView: string; onUpload: () => void; onCreateFolder: () => void }) {
   if (isSearching) return (
-    <div className="glass-card text-center py-12 px-6 relative overflow-hidden">
+    <div className="empty-hero px-6 py-12 text-center">
       <div className="shim" />
-      <p className="text-slate-200 font-semibold text-sm">No results for &ldquo;{searchQuery}&rdquo;</p>
-      <p className="text-slate-500 text-xs mt-2">Try different words — search covers filenames, content, notes, and tags.</p>
+      <p className="relative z-10 text-sm font-semibold text-slate-200">No results for &ldquo;{searchQuery}&rdquo;</p>
+      <p className="relative z-10 mt-2 text-xs text-slate-500">Try different words — search covers filenames, content, notes, and tags.</p>
     </div>
   );
-  if (navView === 'archive') return (
-    <div className="glass-card text-center py-10 relative overflow-hidden">
-      <div className="shim" />
-      <p className="text-slate-500 text-xs">Archive is empty.</p>
-    </div>
-  );
+  if (navView === 'archive') return <div className="empty-hero px-6 py-12 text-center"><p className="text-xs text-slate-500">Archive is empty.</p></div>;
+
   return (
     <div className="fade-up">
-      {/* Hero empty state - Apple product landing card */}
-      <div className="empty-hero scroll-reveal revealed text-center py-14 px-6 mb-8">
+      <div className="empty-hero scroll-reveal revealed mb-8 px-6 py-16 text-center">
         <div className="shim" />
-        <div className="relative z-10 max-w-lg mx-auto">
-          <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center rounded-2xl"
-            style={{
-              background: 'linear-gradient(135deg, rgba(91,154,255,0.14), rgba(139,92,246,0.09))',
-              border: '1px solid rgba(91,154,255,0.18)',
-              boxShadow: '0 0 40px rgba(91,154,255,0.14)'
-            }}>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
+        <div className="relative z-10 mx-auto max-w-lg">
+          <div className="upload-orb mx-auto mb-7 flex h-24 w-24 items-center justify-center rounded-[28px]">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="rgba(191,219,254,0.92)" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </div>
-          <h2 className="text-xl font-semibold luminous-text mb-3 tracking-tight">Your files, organized and ready to share</h2>
-          <p className="text-[13px] text-slate-500 leading-relaxed mb-6 max-w-sm mx-auto">
-            Upload, preview, search, and share documents from one secure vault.
-          </p>
-          <div className="flex items-center justify-center gap-2.5">
-            <button onClick={onUpload} className="btn-primary text-xs px-5 py-2">Upload Files</button>
-            <button onClick={onCreateFolder}
-              className="glass-button text-xs px-4 py-2">
-              Create Folder
-            </button>
-          </div>
+          <h2 className="luminous-text mb-3 text-2xl font-semibold tracking-tight">Your files, organized and ready to share</h2>
+          <p className="mx-auto mb-7 max-w-sm text-[13px] leading-relaxed text-slate-400">Upload, preview, search, and share documents from one secure vault.</p>
+          <div className="flex items-center justify-center gap-2.5"><button onClick={onUpload} className="btn-primary px-5 py-2 text-xs">Upload Files</button><button onClick={onCreateFolder} className="glass-button px-4 py-2 text-xs">Create Folder</button></div>
         </div>
       </div>
 
-      {/* Onboarding cards - floating glass tiles */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="onboarding-card scroll-reveal stagger-1">
-          <div className="card-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <h3 className="text-xs font-semibold text-slate-200 mb-1">Upload files</h3>
-          <p className="text-[11px] text-slate-500 leading-relaxed">Drag and drop PDFs, images, spreadsheets, documents, and text files.</p>
-        </div>
-
-        <div className="onboarding-card scroll-reveal stagger-2">
-          <div className="card-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </div>
-          <h3 className="text-xs font-semibold text-slate-200 mb-1">Organize folders</h3>
-          <p className="text-[11px] text-slate-500 leading-relaxed">Group files into shared folders so everything stays easy to find.</p>
-        </div>
-
-        <div className="onboarding-card scroll-reveal stagger-3">
-          <div className="card-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
-            </svg>
-          </div>
-          <h3 className="text-xs font-semibold text-slate-200 mb-1">Search and preview</h3>
-          <p className="text-[11px] text-slate-500 leading-relaxed">Find files instantly by name, content, tags, and notes, then preview in place.</p>
-        </div>
-
-        <div className="onboarding-card scroll-reveal stagger-4">
-          <div className="card-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <h3 className="text-xs font-semibold text-slate-200 mb-1">Share securely</h3>
-          <p className="text-[11px] text-slate-500 leading-relaxed">Share files with secure links and keep your team documents in one place.</p>
-        </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <OnboardingCard title="Upload files" text="Drag and drop PDFs, images, spreadsheets, documents, and text files." icon="upload" delay="stagger-1" />
+        <OnboardingCard title="Organize folders" text="Group files into shared folders so everything stays easy to find." icon="folder" delay="stagger-2" />
+        <OnboardingCard title="Search and preview" text="Find files instantly by name, content, tags, and notes, then preview in place." icon="search" delay="stagger-3" />
+        <OnboardingCard title="Share securely" text="Share files with secure links and keep your team documents in one place." icon="share" delay="stagger-4" />
       </div>
+    </div>
+  );
+}
+
+function OnboardingCard({ title, text, icon, delay }: { title: string; text: string; icon: 'upload' | 'folder' | 'search' | 'share'; delay: string }) {
+  const path = icon === 'folder'
+    ? <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    : icon === 'search'
+      ? <><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></>
+      : icon === 'share'
+        ? <><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></>
+        : <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>;
+
+  return (
+    <div className={`onboarding-card scroll-reveal ${delay}`}>
+      <div className="card-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(191,219,254,0.88)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{path}</svg></div>
+      <h3 className="mb-1 text-sm font-semibold text-slate-100">{title}</h3>
+      <p className="text-[11px] leading-relaxed text-slate-500">{text}</p>
     </div>
   );
 }
