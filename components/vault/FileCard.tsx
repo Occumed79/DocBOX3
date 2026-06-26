@@ -267,10 +267,10 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
       <div className="shim" />
 
       <div className="absolute right-3 top-3 z-20 flex translate-y-[-4px] gap-1 rounded-full border border-white/10 bg-black/30 p-1 opacity-0 backdrop-blur-xl transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100" onClick={event => event.stopPropagation()}>
-        <button title="Add note" onClick={() => setEditNotes(!editNotes)} className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-semibold text-slate-100 hover:bg-white/20">Note</button>
-        <a title="Download" href={file.storage_url} download={file.original_name} className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-semibold text-slate-100 no-underline hover:bg-white/20">Download</a>
-        <button title="Archive" onClick={archive} className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-semibold text-slate-100 hover:bg-white/20">Archive</button>
-        <button title="Delete" onClick={removeFile} className="rounded-full bg-red-500/15 px-2 py-1 text-[10px] font-semibold text-red-200 hover:bg-red-500/25">Delete</button>
+        <button title="Add note" aria-label="Add note" onClick={() => setEditNotes(!editNotes)} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100 hover:bg-white/20">✎</button>
+        <a title="Download" aria-label="Download" href={file.storage_url} download={file.original_name} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100 no-underline hover:bg-white/20">↓</a>
+        <button title="Archive" aria-label="Archive" onClick={archive} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100 hover:bg-white/20">▣</button>
+        <button title="Delete" aria-label="Delete" onClick={removeFile} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15 text-xs font-semibold text-red-200 hover:bg-red-500/25">×</button>
       </div>
 
       <PreviewArtwork file={file} />
