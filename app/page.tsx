@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import SearchBar from '@/components/vault/SearchBar';
 import DropZone from '@/components/vault/DropZone';
 import FileCard, { type VaultFile, typeClass, formatSize, formatDate } from '@/components/vault/FileCard';
@@ -39,6 +39,45 @@ export default function Home() {
   const [showUpload, setShowUpload]       = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [scrollY, setScrollY] = useState(0);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Scroll-driven ambient effects ───────────────────────────────────
+  useEffect(() => {
+    const root = document.documentElement;
+    const list = document.querySelector('.file-list-scroll') as HTMLElement | null;
+    const scrollEl = list || window;
+
+    const onScroll = () => {
+      const y = list ? list.scrollTop : window.scrollY;
+      const max = list ? (list.scrollHeight - list.clientHeight) : (document.documentElement.scrollHeight - window.innerHeight);
+      const progress = max > 0 ? y / max : 0;
+      setScrollY(y);
+      root.style.setProperty('--scroll-y', y.toString());
+      root.style.setProperty('--scroll-x', '0');
+      root.style.setProperty('--scroll-progress', Math.min(progress, 1).toString());
+      setIsScrolling(true);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => setIsScrolling(false), 150);
+    };
+
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => { scrollEl.removeEventListener('scroll', onScroll); };
+  }, []);
+
+  // ── Reveal-on-scroll for cards ────────────────────────────────────────
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) entry.target.classList.add('revealed');
+      });
+    }, { threshold: 0.12, root: document.querySelector('.file-list-scroll') });
+
+    document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, [files, searchResults, isSearching, showUpload]);
 
   // ── Load folders ──────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
@@ -118,54 +157,56 @@ export default function Home() {
   const rootFolders = folders.filter(f => !f.parent_id);
 
   return (
-    <div className="relative z-10 flex flex-col h-screen overflow-hidden">
+    <div className={`relative z-10 flex flex-col h-screen overflow-hidden ${scrollY > 20 ? 'header-scrolled' : ''} ${isScrolling ? 'scrolling' : ''}`}>
+      <div className="scroll-progress" />
       <div className="vault-ambient" />
 
       {/* ── TOP HEADER ─────────────────────────────────────────────────── */}
-      <header className="relative z-30 shrink-0 px-6 pt-5 pb-4">
-        {/* Logo + nav + upload - floating pill */}
-        <div className="floating-command-bar px-5 py-3 mb-6">
+      <header className="relative z-30 shrink-0 flex flex-col items-center pt-6 pb-8 px-6 transition-all duration-300">
+        {/* Floating command bar */}
+        <div className="floating-command-bar px-3 py-2 mb-8">
           <div className="shim" />
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="logo-mark w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white text-[10px] shrink-0 relative overflow-hidden">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5 pl-2 pr-3">
+              <div className="logo-mark w-7 h-7 rounded-lg flex items-center justify-center font-bold text-white text-[10px] shrink-0 relative overflow-hidden">
                 <div className="shim" />
                 SV
               </div>
-              <div>
-                <p className="text-[12px] font-semibold text-white leading-tight tracking-tight">Source Vault</p>
-                <p className="text-[9px] text-slate-500">Document Vault</p>
-              </div>
+              <span className="text-[13px] font-semibold text-white tracking-tight">Source Vault</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="w-px h-4 bg-white/10" />
+
+            <div className="flex items-center">
               {(['all','archive'] as NavView[]).map(v => (
                 <button key={v} onClick={() => { setNavView(v); setIsSearching(false); setActiveFolder(null); }}
                   className={`nav-item capitalize ${navView === v && !isSearching ? 'active' : ''}`}>
                   {v === 'all' ? 'All Files' : 'Archive'}
                 </button>
               ))}
-              <div className="w-px h-4 bg-white/10 mx-1" />
-              <button onClick={() => setShowUpload(!showUpload)}
-                className="btn-primary text-[11px] px-3 py-1.5 flex items-center gap-1.5">
-                {showUpload ? '× Close' : (
-                  <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>Upload</>
-                )}
-              </button>
             </div>
+
+            <button onClick={() => setShowUpload(!showUpload)}
+              className="btn-primary text-[11px] px-3.5 py-1.5 ml-1 flex items-center gap-1.5">
+              {showUpload ? '× Close' : (
+                <><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>Upload</>
+              )}
+            </button>
           </div>
         </div>
 
         {/* ── SEARCH HERO ─────────────────────────────────────────────── */}
-        <SearchBar
-          onResults={(results, q) => { setSearchResults(results); setSearchQuery(q); setIsSearching(true); }}
-          onClear={() => { setIsSearching(false); setSearchQuery(''); }}
-        />
+        <div className="w-full max-w-2xl">
+          <SearchBar
+            onResults={(results, q) => { setSearchResults(results); setSearchQuery(q); setIsSearching(true); }}
+            onClear={() => { setIsSearching(false); setSearchQuery(''); }}
+          />
+        </div>
 
         {/* ── FOLDER PILLS ────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex items-center gap-2 mt-5 overflow-x-auto pb-1 max-w-full" style={{ scrollbarWidth: 'none' }}>
           <button
             onClick={() => { setActiveFolder(null); setNavView('all'); setIsSearching(false); }}
             className={`folder-pill ${!activeFolder && !isSearching && navView==='all' ? 'active' : ''}`}>
@@ -187,7 +228,7 @@ export default function Home() {
           {showNewFolder ? (
             <div className="flex items-center gap-1.5 shrink-0">
               <input autoFocus
-                className="bg-white/[0.05] border border-white/10 rounded-full px-3 py-1 text-[11px] text-slate-200 outline-none focus:border-blue-400/40 w-32"
+                className="bg-white/[0.04] border border-white/8 rounded-full px-3 py-1 text-[11px] text-slate-200 outline-none focus:border-blue-400/40 w-32"
                 placeholder="Folder name…"
                 value={newFolderName}
                 onChange={e => setNewFolderName(e.target.value)}
@@ -225,25 +266,25 @@ export default function Home() {
         <div className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ${selectedFile ? 'max-w-[56%]' : ''}`}>
 
           {/* Section label */}
-          <div className="section-bar px-5 py-3.5 shrink-0 flex items-center justify-between rounded-t-xl border-t border-l border-r border-white/8">
+          <div className="shrink-0 px-6 py-4 flex items-center justify-between">
             <div>
-              <span className="text-xs font-semibold text-slate-200">
+              <span className="text-sm font-semibold text-white/90">
                 {isSearching ? `Results for "${searchQuery}"` : activeFolder ? folders.find(f=>f.id===activeFolder)?.name : navView === 'archive' ? 'Archive' : 'All Files'}
               </span>
-              <span className="text-[10px] text-slate-500 ml-2">
+              <span className="text-[11px] text-slate-500 ml-2">
                 {displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}
               </span>
             </div>
             {selectedFile && (
               <button onClick={() => setSelectedFile(null)}
-                className="text-[10px] text-slate-500 hover:text-slate-200 transition-colors">
+                className="text-[11px] text-slate-500 hover:text-slate-200 transition-colors">
                 Close preview ×
               </button>
             )}
           </div>
 
           {/* Files */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5">
+          <div className="file-list-scroll flex-1 overflow-y-auto px-6 py-2 space-y-3">
             {loading ? (
               [...Array(6)].map((_,i) => (
                 <div key={i} className="glass-card h-16 animate-pulse" style={{ opacity: 1 - i*0.15 }} />
@@ -252,16 +293,17 @@ export default function Home() {
               <EmptyState isSearching={isSearching} searchQuery={searchQuery} navView={navView}
                 onUpload={() => setShowUpload(true)} onCreateFolder={() => setShowNewFolder(true)} />
             ) : (
-              displayFiles.map(f => (
-                <FileCard
-                  key={f.id}
-                  file={f}
-                  selected={selectedFile?.id === f.id}
-                  onSelect={setSelectedFile}
-                  onUpdate={handleUpdate}
-                  onDelete={handleDelete}
-                  searchMode={isSearching}
-                />
+              displayFiles.map((f, i) => (
+                <div key={f.id} className={`scroll-reveal stagger-${Math.min((i % 6) + 1, 6)}`}>
+                  <FileCard
+                    file={f}
+                    selected={selectedFile?.id === f.id}
+                    onSelect={setSelectedFile}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                    searchMode={isSearching}
+                  />
+                </div>
               ))
             )}
           </div>
@@ -318,34 +360,26 @@ function PreviewPane({ file, onClose, onUpdate, onDelete }: {
 
   return (
     <>
-      <div className="preview-pane flex flex-col overflow-hidden rounded-r-xl" style={{ width: '44%', minWidth: 320 }}>
-        {/* Inspector header */}
-        <div className="px-5 py-3.5 border-b border-white/7 shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-300/90">File Inspector</span>
-          </div>
-          <button onClick={onClose} className="btn-ghost w-7 h-7 flex items-center justify-center text-sm shrink-0">×</button>
-        </div>
-
+      <div className="preview-pane flex flex-col overflow-hidden rounded-r-2xl" style={{ width: '44%', minWidth: 320 }}>
         {/* Pane header */}
-        <div className="px-5 py-4 border-b border-white/7 shrink-0">
-          <div className="min-w-0 mb-2">
-            <p className="text-sm font-semibold text-slate-100 truncate leading-snug">{file.name}</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">{file.original_name}</p>
+        <div className="px-5 py-4 shrink-0 border-b border-white/5">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white/90 truncate leading-snug">{file.name}</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">{file.original_name}</p>
+            </div>
+            <button onClick={onClose} className="btn-ghost w-7 h-7 flex items-center justify-center text-sm shrink-0">×</button>
           </div>
 
           {/* Meta */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap mb-3">
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
             <span className="text-[10px] text-slate-500">{formatSize(file.size_bytes)}</span>
             <span className="text-[10px] text-slate-500">{formatDate(file.upload_date)}</span>
           </div>
 
           {/* Action row */}
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2">
             {url && (
               <a href={url} download={file.original_name}
                 className="btn-primary text-[11px] px-3 py-1.5 flex items-center gap-1.5">↓ Download</a>
@@ -523,25 +557,25 @@ function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolde
   );
   return (
     <div className="fade-up">
-      {/* Hero empty state - Apple landing card style */}
-      <div className="empty-hero text-center py-10 px-6 mb-6">
+      {/* Hero empty state - Apple product landing card */}
+      <div className="empty-hero scroll-reveal revealed text-center py-14 px-6 mb-8">
         <div className="shim" />
-        <div className="relative z-10 max-w-md mx-auto">
-          <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-2xl"
+        <div className="relative z-10 max-w-lg mx-auto">
+          <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center rounded-2xl"
             style={{
-              background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.10))',
-              border: '1px solid rgba(96,165,250,0.20)',
-              boxShadow: '0 0 24px rgba(59,130,246,0.12)'
+              background: 'linear-gradient(135deg, rgba(91,154,255,0.14), rgba(139,92,246,0.09))',
+              border: '1px solid rgba(91,154,255,0.18)',
+              boxShadow: '0 0 40px rgba(91,154,255,0.14)'
             }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <h2 className="text-lg font-semibold text-white mb-2 tracking-tight">Your files, organized and ready to share</h2>
-          <p className="text-sm text-slate-500 leading-relaxed mb-5 max-w-sm mx-auto">
+          <h2 className="text-xl font-semibold luminous-text mb-3 tracking-tight">Your files, organized and ready to share</h2>
+          <p className="text-[13px] text-slate-500 leading-relaxed mb-6 max-w-sm mx-auto">
             Upload, preview, search, and share documents from one secure vault.
           </p>
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2.5">
             <button onClick={onUpload} className="btn-primary text-xs px-5 py-2">Upload Files</button>
             <button onClick={onCreateFolder}
               className="glass-button text-xs px-4 py-2">
@@ -553,7 +587,7 @@ function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolde
 
       {/* Onboarding cards - floating glass tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="onboarding-card">
+        <div className="onboarding-card scroll-reveal stagger-1">
           <div className="card-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
@@ -563,7 +597,7 @@ function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolde
           <p className="text-[11px] text-slate-500 leading-relaxed">Drag and drop PDFs, images, spreadsheets, documents, and text files.</p>
         </div>
 
-        <div className="onboarding-card">
+        <div className="onboarding-card scroll-reveal stagger-2">
           <div className="card-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -573,7 +607,7 @@ function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolde
           <p className="text-[11px] text-slate-500 leading-relaxed">Group files into shared folders so everything stays easy to find.</p>
         </div>
 
-        <div className="onboarding-card">
+        <div className="onboarding-card scroll-reveal stagger-3">
           <div className="card-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
@@ -583,7 +617,7 @@ function EmptyState({ isSearching, searchQuery, navView, onUpload, onCreateFolde
           <p className="text-[11px] text-slate-500 leading-relaxed">Find files instantly by name, content, tags, and notes, then preview in place.</p>
         </div>
 
-        <div className="onboarding-card">
+        <div className="onboarding-card scroll-reveal stagger-4">
           <div className="card-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>

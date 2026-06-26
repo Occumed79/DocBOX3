@@ -57,12 +57,8 @@ export default function DropZone({ folderId, onUploaded, onClose }: Props) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: ACCEPTED, multiple: true });
 
   return (
-    <div className="relative rounded-2xl overflow-hidden"
-      style={{
-        padding: '1.5px',
-        background: 'linear-gradient(145deg, rgba(255,255,255,0.12) 0%, rgba(59,130,246,0.18) 50%, rgba(99,102,241,0.14) 100%)',
-      }}>
-      <div className="relative glass rounded-[14px] overflow-hidden">
+    <div className="relative rounded-2xl overflow-hidden">
+      <div className="relative glass-card p-1 overflow-hidden">
         <div className="shim" />
         <div
           {...getRootProps()}

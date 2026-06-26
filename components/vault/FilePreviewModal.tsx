@@ -34,7 +34,7 @@ export default function FilePreviewModal({ file, onClose }: { file: VaultFile; o
           <div className="flex items-center gap-2.5">
             <span className={`tbadge ${typeClass(file.file_type)}`}>{file.file_type.toUpperCase()}</span>
             <div>
-              <h3 className="text-sm font-semibold text-slate-100 leading-tight">{file.name}</h3>
+              <h3 className="text-sm font-semibold text-white/90 leading-tight">{file.name}</h3>
               <p className="text-[10px] text-slate-500 mt-0.5">{file.original_name} · {formatSize(file.size_bytes)} · {formatDate(file.upload_date)}</p>
             </div>
           </div>

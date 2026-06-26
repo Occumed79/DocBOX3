@@ -92,7 +92,7 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
       {/* Selected left accent */}
       {selected && (
         <div className="absolute left-0 top-2 bottom-2 w-[1.5px] rounded-full"
-          style={{ background: 'linear-gradient(180deg, rgba(96,165,250,0.6), rgba(99,102,241,0.5))' }} />
+          style={{ background: 'linear-gradient(180deg, rgba(91,154,255,0.55), rgba(139,92,246,0.45))' }} />
       )}
       <div className="shim" />
       <div className="flex items-start gap-2.5">
@@ -110,14 +110,14 @@ export default function FileCard({ file, selected, onSelect, onUpdate, onDelete,
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
-            <p className="text-sm font-semibold text-slate-100 leading-tight truncate flex-1">{file.name}</p>
+            <p className="text-sm font-semibold text-white/90 leading-tight truncate flex-1">{file.name}</p>
             <span className={`tbadge ${typeClass(file.file_type)} shrink-0 mt-0.5`}>{file.file_type.toUpperCase()}</span>
           </div>
 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[10px] text-slate-600">{formatSize(file.size_bytes)}</span>
-            <span className="text-[10px] text-slate-700">·</span>
-            <span className="text-[10px] text-slate-600">{formatDate(file.upload_date)}</span>
+            <span className="text-[10px] text-slate-500">{formatSize(file.size_bytes)}</span>
+            <span className="text-[10px] text-slate-600">·</span>
+            <span className="text-[10px] text-slate-500">{formatDate(file.upload_date)}</span>
             {searchMode && file.folder_name && (
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 border border-white/8 text-slate-500">
                 {file.folder_name}

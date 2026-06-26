@@ -60,14 +60,14 @@ export default function SearchBar({ onResults, onClear }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="search-hero flex items-center gap-3 px-4 py-2.5 relative shimmer-surface">
+      <div className="search-hero flex items-center gap-3.5 px-5 py-3 relative shimmer-surface">
         <div className="shim" />
         {/* Icon */}
         <div className="shrink-0">
           {loading ? (
             <div className="w-4 h-4 border-2 border-blue-400/60 border-t-transparent rounded-full animate-spin" />
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.5)" strokeWidth="1.8">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.55)" strokeWidth="1.8">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
           )}
@@ -79,12 +79,12 @@ export default function SearchBar({ onResults, onClear }: Props) {
           value={q}
           onChange={e => setQ(e.target.value)}
           placeholder='Search shared files — "signed agreement", "invoice package", "training materials"…'
-          style={{ fontSize: 14 }}
+          style={{ fontSize: 15 }}
         />
 
         {q ? (
           <button onClick={() => { setQ(''); onClear(); }}
-            className="shrink-0 w-5 h-5 rounded-full bg-white/10 hover:bg-white/14 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-sm leading-none">
+            className="shrink-0 w-5 h-5 rounded-full bg-white/8 hover:bg-white/12 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-sm leading-none">
             ×
           </button>
         ) : (
@@ -96,13 +96,12 @@ export default function SearchBar({ onResults, onClear }: Props) {
 
       {/* Quick search chips */}
       {!q && (
-        <div className="flex items-center gap-2 px-1 flex-wrap">
-          <span className="text-[10px] text-slate-600 hidden sm:inline">Try:</span>
+        <div className="flex items-center justify-center gap-2 flex-wrap">
           {QUICK_SEARCHES.map(text => (
             <button
               key={text}
               onClick={() => runQuick(text)}
-              className="quick-chip text-[10px] px-2 py-0.5 rounded-full"
+              className="quick-chip text-[10px] px-2.5 py-1 rounded-full"
             >
               {text}
             </button>
