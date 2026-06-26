@@ -38,7 +38,10 @@ body {
 }
 
 .vault-ambient {
-  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
   background:
     radial-gradient(ellipse 70% 55% at 25% -5%, rgba(91,154,255,0.08) 0%, transparent 60%),
     radial-gradient(ellipse 50% 40% at 90% 15%, rgba(139,92,246,0.05) 0%, transparent 55%),
@@ -85,6 +88,18 @@ body {
   transition: transform 0.28s cubic-bezier(0.4,0,0.2,1), box-shadow 0.28s ease, border-color 0.28s ease;
   position: relative;
   overflow: hidden;
+  border: 1px solid var(--hairline-soft);
+  border-top-color: rgba(255,255,255,0.16);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.035) 42%, rgba(255,255,255,0.018)),
+    radial-gradient(circle at 12% 0%, rgba(255,255,255,0.11), transparent 32%),
+    radial-gradient(circle at 95% 10%, rgba(88,166,255,0.09), transparent 38%);
+  backdrop-filter: blur(34px) saturate(170%);
+  -webkit-backdrop-filter: blur(34px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.13),
+    inset 0 -1px 0 rgba(255,255,255,0.035),
+    0 24px 70px rgba(0,0,0,0.30);
 }
 
 .glass-card::before {
@@ -95,7 +110,7 @@ body {
   background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,0.04) 50%, transparent 58%);
   background-size: 220% 100%;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 250ms ease;
 }
 
 .glass-card:hover {
@@ -511,8 +526,8 @@ mark { background: rgba(251,191,36,0.18); color: #fcd34d; border-radius: 3px; pa
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% { background-position: -220% 0; }
+  100% { background-position: 220% 0; }
 }
 
 @keyframes glowPulse {
