@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 export interface VaultFile {
   id: string;
@@ -48,7 +48,7 @@ function stripHtml(value?: string) {
   return (value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function PreviewFrame({ children, tone = 'blue' }: { children: React.ReactNode; tone?: 'blue' | 'red' | 'green' | 'violet' | 'cyan' | 'slate' }) {
+function PreviewFrame({ children, tone = 'blue' }: { children: ReactNode; tone?: 'blue' | 'red' | 'green' | 'violet' | 'cyan' | 'slate' }) {
   const tones = {
     blue: 'from-sky-400/25 via-blue-500/10 to-slate-950/75',
     red: 'from-rose-400/25 via-blue-500/10 to-slate-950/75',
@@ -77,14 +77,91 @@ function PreviewLines() {
   );
 }
 
+function decodeDataUrl(url: string) {
+  const comma = url.indexOf(',');
+  if (comma === -1) return '';
+  const meta = url.slice(0, comma);
+  const payload = url.slice(comma + 1);
+  try {
+    return meta.includes(';base64') ? atob(payload) : decodeURIComponent(payload);
+  } catch {
+    return '';
+  }
+}
+
 function PreviewArtwork({ file }: { file: VaultFile }) {
   const type = file.file_type.toLowerCase();
   const summary = stripHtml(file.headline) || file.notes || file.original_name;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [textPreview, setTextPreview] = useState('');
+  const isTextLike = ['txt','csv','json'].includes(type);
 
-  if (['png','jpg','jpeg'].includes(type)) {
+  useEffect(() => {
+    let active = true;
+    setPreviewUrl(null);
+    setTextPreview('');
+
+    fetch(`/api/preview?id=${encodeURIComponent(file.id)}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(async data => {
+        if (!active || !data?.url) return;
+        setPreviewUrl(data.url);
+
+        if (isTextLike) {
+          if (data.url.startsWith('data:')) {
+            setTextPreview(decodeDataUrl(data.url).slice(0, 900));
+          } else {
+            try {
+              const text = await fetch(data.url).then(response => response.text());
+              if (active) setTextPreview(text.slice(0, 900));
+            } catch {
+              if (active) setTextPreview('');
+            }
+          }
+        }
+      })
+      .catch(() => {
+        if (active) setPreviewUrl(null);
+      });
+
+    return () => { active = false; };
+  }, [file.id, isTextLike]);
+
+  if (['png','jpg','jpeg'].includes(type) && previewUrl) {
     return (
       <PreviewFrame tone="cyan">
-        <img src={file.storage_url} alt={file.name} className="relative z-10 h-full w-full object-cover" />
+        <img src={previewUrl} alt={file.name} className="relative z-10 h-full w-full object-cover" />
+      </PreviewFrame>
+    );
+  }
+
+  if (type === 'pdf' && previewUrl) {
+    return (
+      <PreviewFrame tone="red">
+        <iframe title={`${file.name} preview`} src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH`} className="relative z-10 h-full w-full rounded-[20px] bg-white/95" style={{ border: 0, pointerEvents: 'none' }} />
+        <div className="absolute bottom-3 right-3 z-20 rounded-full bg-rose-500/90 px-2.5 py-1 text-[10px] font-black tracking-wider text-white shadow-lg">PDF</div>
+      </PreviewFrame>
+    );
+  }
+
+  if (['html','htm'].includes(type) && previewUrl) {
+    return (
+      <PreviewFrame tone="violet">
+        <iframe title={`${file.name} page preview`} src={previewUrl} sandbox="" className="relative z-10 h-full w-full rounded-[20px] bg-white" style={{ border: 0, pointerEvents: 'none', transform: 'scale(0.86)', width: '116%', height: '116%' }} />
+      </PreviewFrame>
+    );
+  }
+
+  if (isTextLike && textPreview) {
+    const lines = textPreview.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(0, 8);
+    return (
+      <PreviewFrame tone={type === 'csv' ? 'green' : 'violet'}>
+        <div className="relative z-10 h-[78%] w-[78%] rotate-[-1deg] overflow-hidden rounded-2xl bg-slate-50/95 p-4 text-left shadow-2xl">
+          <div className="mb-3 h-4 w-1/2 rounded-full bg-blue-400/20" />
+          <div className="space-y-1.5 font-mono text-[9px] leading-tight text-slate-600/80">
+            {lines.map((line, index) => <p key={index} className="truncate">{line}</p>)}
+          </div>
+        </div>
       </PreviewFrame>
     );
   }
