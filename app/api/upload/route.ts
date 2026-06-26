@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/db/client';
-import { uploadToStorage } from '@/lib/storage';
+import { uploadFileThroughFacilitator } from '@/lib/upload-facilitator';
 import { extractText } from '@/lib/extract';
 
 export const runtime = 'nodejs';
@@ -34,20 +34,19 @@ export async function POST(req: NextRequest) {
     const originalName = file.name;
     const displayName = originalName.replace(/\.[^.]+$/, '');
 
-    // Read file buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Extract text
     const extractedText = await extractText(buffer, mimeType, originalName);
 
-    // Upload to storage
-    const { url, key } = await uploadToStorage(buffer, originalName, mimeType);
+    const { url, key } = await uploadFileThroughFacilitator({
+      buffer,
+      originalName,
+      mimeType,
+    });
 
-    // Parse tags
     const tags = tagsRaw ? tagsRaw.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
 
-    // Save to DB
     const rows = await query(
       `INSERT INTO sv_files
         (folder_id, name, original_name, file_type, mime_type, size_bytes, storage_url, storage_key, extracted_text, notes, tags)
