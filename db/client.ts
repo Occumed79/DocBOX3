@@ -1,37 +1,85 @@
-import { neon } from '@neondatabase/serverless';
+import { Pool, type PoolConfig, type QueryResultRow } from 'pg';
 
-type NeonClient = ReturnType<typeof neon>;
+const pools = new Map<string, Pool>();
 
-let client: NeonClient | null = null;
+function databaseCandidates() {
+  const raw = process.env.DATABASE_URL?.trim();
+  if (!raw) throw new Error('DATABASE_URL is not set.');
 
-function getDatabaseUrl() {
-  const url = process.env.DATABASE_URL?.trim();
-  if (!url) throw new Error('DATABASE_URL is not set.');
-  return url;
-}
-
-function getClient() {
-  if (!client) {
-    client = neon(getDatabaseUrl(), {
-      fetchOptions: { cache: 'no-store' },
-    });
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('DATABASE_URL is not a valid PostgreSQL connection string.');
   }
-  return client;
+
+  // node-postgres handles TLS itself. Removing these URL flags avoids
+  // channel-binding/fetch compatibility issues seen on Render.
+  parsed.searchParams.delete('channel_binding');
+  parsed.searchParams.delete('sslmode');
+
+  const candidates = [parsed.toString()];
+  const host = parsed.hostname;
+
+  // Neon supplies pooled and direct hosts. Try the counterpart when a
+  // transient network or pooler error occurs.
+  if (host.includes('-pooler.')) {
+    const direct = new URL(parsed.toString());
+    direct.hostname = host.replace('-pooler.', '.');
+    candidates.push(direct.toString());
+  } else if (host.includes('.neon.tech')) {
+    const pooled = new URL(parsed.toString());
+    const firstDot = host.indexOf('.');
+    pooled.hostname = `${host.slice(0, firstDot)}-pooler${host.slice(firstDot)}`;
+    candidates.push(pooled.toString());
+  }
+
+  return [...new Set(candidates)];
 }
 
-function isTransientDatabaseError(error: unknown) {
+function poolFor(connectionString: string) {
+  const existing = pools.get(connectionString);
+  if (existing) return existing;
+
+  const hostname = new URL(connectionString).hostname;
+  const local = hostname === 'localhost' || hostname === '127.0.0.1';
+  const config: PoolConfig = {
+    connectionString,
+    max: 5,
+    min: 0,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 12_000,
+    allowExitOnIdle: true,
+    ssl: local ? undefined : { rejectUnauthorized: false },
+  };
+
+  const pool = new Pool(config);
+  pool.on('error', error => {
+    console.error('Idle PostgreSQL client error:', error);
+    pools.delete(connectionString);
+  });
+  pools.set(connectionString, pool);
+  return pool;
+}
+
+function isTransient(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   return [
-    'fetch failed',
-    'error connecting to database',
-    'network',
     'econnreset',
+    'econnrefused',
+    'enotfound',
     'etimedout',
-    'timed out',
+    'timeout',
+    'connection terminated',
+    'connection closed',
+    'server closed the connection',
     'socket',
-    '502',
-    '503',
-    '504',
+    'network',
+    'too many clients',
+    'remaining connection slots',
+    '57p01',
+    '57p02',
+    '57p03',
   ].some(fragment => message.includes(fragment));
 }
 
@@ -39,25 +87,31 @@ function wait(milliseconds: number) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-export async function query(text: string, params: unknown[] = []): Promise<any[]> {
-  const attempts = 3;
+export async function query<T extends QueryResultRow = any>(text: string, params: unknown[] = []): Promise<T[]> {
+  const candidates = databaseCandidates();
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const sql = getClient();
-      const result = await sql.query(text, params);
-      return result as any[];
-    } catch (error) {
-      lastError = error;
-      console.error(`Database query attempt ${attempt}/${attempts} failed:`, error);
+  for (let round = 0; round < 2; round += 1) {
+    for (const connectionString of candidates) {
+      const pool = poolFor(connectionString);
+      try {
+        const result = await pool.query<T>(text, params);
+        return result.rows;
+      } catch (error) {
+        lastError = error;
+        const host = new URL(connectionString).hostname;
+        console.error(`PostgreSQL query failed via ${host}:`, error);
 
-      if (!isTransientDatabaseError(error) || attempt === attempts) break;
+        if (!isTransient(error)) {
+          throw error;
+        }
 
-      // Recreate the HTTP client before retrying in case its fetch state is stale.
-      client = null;
-      await wait(250 * 2 ** (attempt - 1));
+        pools.delete(connectionString);
+        await pool.end().catch(() => undefined);
+      }
     }
+
+    if (round === 0) await wait(500);
   }
 
   const detail = lastError instanceof Error ? lastError.message : String(lastError || 'Unknown database error');
