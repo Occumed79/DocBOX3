@@ -7,6 +7,7 @@ import './styles/inspector.css';
 import './styles/overlays.css';
 import './styles/responsive.css';
 import './styles/stage.css';
+import './styles/stage-polish.css';
 
 export const metadata: Metadata = {
   title: 'Source Vault',
