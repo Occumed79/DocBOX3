@@ -1,0 +1,52 @@
+body::before,
+body::after {
+  content: none !important;
+  display: none !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline-color: rgba(224, 151, 255, 0.95) !important;
+}
+
+.cosmic-vault-shell .type-badge,
+.preview-modal .type-badge {
+  color: #e8dcff !important;
+  border-color: rgba(224, 198, 255, 0.2) !important;
+  background: rgba(158, 105, 255, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.cosmic-vault-shell svg,
+.upload-sheet svg,
+.preview-modal svg {
+  color: inherit;
+}
+
+.upload-sheet .icon-action,
+.preview-modal .icon-action {
+  border-color: rgba(225, 200, 255, 0.16) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #cfc2dc !important;
+}
+
+.upload-sheet .sheet-handle {
+  background: rgba(230, 209, 255, 0.27) !important;
+}
+
+.cosmic-vault-shell .spinner,
+.upload-sheet .spinner,
+.preview-modal .spinner {
+  border-color: rgba(224, 190, 255, 0.24) !important;
+  border-top-color: #e69cff !important;
+}
+
+@media (forced-colors: active) {
+  .traveling-spark,
+  .ambient-bloom,
+  .wave-loop,
+  .pixel-field { display: none; }
+}
