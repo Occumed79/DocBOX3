@@ -6,6 +6,8 @@ import { formatDate, formatSize } from './FileCard';
 import FilePreviewModal from './FilePreviewModal';
 import { UploadIcon } from './icons';
 
+type StageFile = VaultFile & { extracted_text?: string | null };
+
 async function readError(response: Response, fallback: string) {
   try {
     const payload = await response.json();
@@ -16,7 +18,7 @@ async function readError(response: Response, fallback: string) {
 }
 
 export default function FileStage({ file, onUpload }: {
-  file: VaultFile | null;
+  file: StageFile | null;
   onUpload: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function FileStage({ file, onUpload }: {
   const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(type);
   const isPdf = type === 'pdf';
   const isText = ['txt', 'csv', 'html', 'htm', 'json'].includes(type);
-  const hasExtractedText = Boolean(file?.extracted_text?.trim());
+  const extractedText = file?.extracted_text?.trim() || '';
 
   return (
     <section className={file ? 'document-stage has-file' : 'document-stage empty'} aria-label={file ? `Preview of ${file.name}` : 'Document stage'}>
@@ -84,7 +86,7 @@ export default function FileStage({ file, onUpload }: {
         ) : !url && !previewError ? (
           <div className="stage-loading"><span className="spinner large" /><span>Preparing preview…</span></div>
         ) : previewError ? (
-          <div className="stage-unavailable"><strong>Preview unavailable</strong><span>{previewError}</span>{hasExtractedText && <ExtractedDocument text={file.extracted_text || ''} />}</div>
+          <div className="stage-unavailable"><strong>Preview unavailable</strong><span>{previewError}</span>{extractedText && <ExtractedDocument text={extractedText} />}</div>
         ) : isImage ? (
           <button type="button" className="stage-image-button" onClick={() => setShowFull(true)} aria-label="Open full image preview">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -94,8 +96,8 @@ export default function FileStage({ file, onUpload }: {
           <iframe src={`${url}#toolbar=0&navpanes=0&view=FitH`} title={file.name} className="stage-document-frame" />
         ) : isText ? (
           <StageTextPreview url={url || ''} />
-        ) : hasExtractedText ? (
-          <ExtractedDocument text={file.extracted_text || ''} />
+        ) : extractedText ? (
+          <ExtractedDocument text={extractedText} />
         ) : (
           <div className="stage-unavailable"><strong>Inline preview is not available</strong><span>Download this {type.toUpperCase()} file to open it in its native application.</span></div>
         )}
