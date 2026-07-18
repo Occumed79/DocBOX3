@@ -1,5 +1,7 @@
 'use client';
 
+import type { CSSProperties } from 'react';
+
 const SPARKS = [
   [8, 18, 5, -2, 15], [16, 28, 3, -8, 19], [24, 12, 4, -12, 17], [31, 37, 6, -4, 21],
   [39, 22, 3, -16, 16], [47, 48, 5, -7, 23], [55, 30, 4, -11, 18], [63, 58, 6, -1, 20],
@@ -17,18 +19,9 @@ export default function LuminousBackdrop() {
       <div className="pixel-field pixel-field-top" />
       <div className="pixel-field pixel-field-bottom" />
 
-      <div className="wave-loop wave-loop-back">
-        <WaveSvg id="back" />
-        <WaveSvg id="back-copy" />
-      </div>
-      <div className="wave-loop wave-loop-mid">
-        <WaveSvg id="mid" />
-        <WaveSvg id="mid-copy" />
-      </div>
-      <div className="wave-loop wave-loop-front">
-        <WaveSvg id="front" />
-        <WaveSvg id="front-copy" />
-      </div>
+      <div className="wave-loop wave-loop-back"><WaveSvg id="back" /><WaveSvg id="back-copy" /></div>
+      <div className="wave-loop wave-loop-mid"><WaveSvg id="mid" /><WaveSvg id="mid-copy" /></div>
+      <div className="wave-loop wave-loop-front"><WaveSvg id="front" /><WaveSvg id="front-copy" /></div>
 
       <div className="spark-field">
         {SPARKS.map(([top, left, size, delay, duration], index) => (
@@ -41,7 +34,7 @@ export default function LuminousBackdrop() {
               '--spark-size': `${size}px`,
               '--spark-delay': `${delay}s`,
               '--spark-duration': `${duration}s`,
-            } as React.CSSProperties}
+            } as CSSProperties}
           />
         ))}
       </div>
