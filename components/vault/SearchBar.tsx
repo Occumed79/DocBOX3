@@ -1,113 +1,129 @@
 'use client';
-import { useState, useRef, useEffect, useCallback } from 'react';
+
+import { useEffect, useRef, useState } from 'react';
 import type { VaultFile } from './FileCard';
 
-const QUICK_SEARCHES = [
-  'signed agreement',
-  'invoice package',
-  'training materials',
-  'employee forms',
-  'shared packet',
-  'reference documents',
-];
+const QUICK_SEARCHES = ['signed agreement', 'invoice package', 'training materials', 'employee forms'];
 
 interface Props {
   onResults: (results: VaultFile[], query: string) => void;
   onClear: () => void;
+  onError?: (message: string) => void;
 }
 
-export default function SearchBar({ onResults, onClear }: Props) {
-  const [q, setQ] = useState('');
+export default function SearchBar({ onResults, onClear, onError }: Props) {
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const search = useCallback(async (query: string) => {
-    if (!query.trim()) { onClear(); return; }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      onResults(Array.isArray(data) ? data : [], query);
-    } catch { /* silent */ }
-    setLoading(false);
-  }, [onResults, onClear]);
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) { onClear(); return; }
-    debounceRef.current = setTimeout(() => search(q), 380);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [q, search, onClear]);
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setLoading(false);
+      onClear();
+      return;
+    }
 
-  // Global ⌘K / Ctrl+K shortcut
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          let message = 'Search could not be completed.';
+          try {
+            const payload = await response.json();
+            message = payload?.error || message;
+          } catch {
+            // Keep the fallback message.
+          }
+          throw new Error(message);
+        }
+        const data = await response.json();
+        onResults(Array.isArray(data) ? data : [], trimmed);
+      } catch (searchError) {
+        if (searchError instanceof DOMException && searchError.name === 'AbortError') return;
+        onError?.(searchError instanceof Error ? searchError.message : 'Search could not be completed.');
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 360);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [onClear, onError, onResults, query]);
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
         inputRef.current?.focus();
       }
+      if (event.key === 'Escape' && document.activeElement === inputRef.current) {
+        setQuery('');
+        inputRef.current?.blur();
+      }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
   }, []);
 
-  const runQuick = (text: string) => {
-    setQ(text);
-    search(text);
-    inputRef.current?.focus();
-  };
-
   return (
-    <div className="space-y-3">
-      <div className="search-hero flex items-center gap-3.5 px-5 py-3 relative shimmer-surface">
-        <div className="shim" />
-        {/* Icon */}
-        <div className="shrink-0">
+    <div className="search-stack">
+      <div className="search-control control-glass">
+        <span className="search-icon" aria-hidden="true">
           {loading ? (
-            <div className="w-4 h-4 border-2 border-blue-400/60 border-t-transparent rounded-full animate-spin" />
+            <span className="spinner" />
           ) : (
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.55)" strokeWidth="1.8">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
             </svg>
           )}
-        </div>
-
+        </span>
+        <label className="sr-only" htmlFor="vault-search">Search Source Vault</label>
         <input
+          id="vault-search"
           ref={inputRef}
-          type="text"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder='Search shared files — "signed agreement", "invoice package", "training materials"…'
-          style={{ fontSize: 15 }}
+          type="search"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search filenames, document text, tags, and notes"
+          autoComplete="off"
+          spellCheck="false"
         />
-
-        {q ? (
-          <button onClick={() => { setQ(''); onClear(); }}
-            className="shrink-0 w-5 h-5 rounded-full bg-white/8 hover:bg-white/12 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center text-sm leading-none">
-            ×
+        {query ? (
+          <button type="button" className="search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
           </button>
         ) : (
-          <div className="shrink-0 hidden sm:flex items-center gap-1">
-            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/8 text-slate-600 font-mono">⌘K</span>
-          </div>
+          <kbd className="keyboard-hint">⌘K</kbd>
         )}
       </div>
 
-      {/* Quick search chips */}
-      {!q && (
-        <div className="flex items-center justify-center gap-2 flex-wrap">
-          {QUICK_SEARCHES.map(text => (
-            <button
-              key={text}
-              onClick={() => runQuick(text)}
-              className="quick-chip text-[10px] px-2.5 py-1 rounded-full"
-            >
-              {text}
+      {!query && (
+        <div className="search-suggestions" aria-label="Suggested searches">
+          <span>Try:</span>
+          {QUICK_SEARCHES.map(value => (
+            <button key={value} type="button" onClick={() => {
+              setQuery(value);
+              inputRef.current?.focus();
+            }}>
+              {value}
             </button>
           ))}
         </div>
       )}
+
+      <span className="sr-only" aria-live="polite">{loading ? 'Searching Source Vault' : ''}</span>
     </div>
   );
 }

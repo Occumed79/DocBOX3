@@ -1,109 +1,153 @@
 'use client';
+
 import { useCallback, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
+import type { VaultFile } from './FileCard';
 
 const ACCEPTED = {
   'application/pdf': ['.pdf'],
   'image/png': ['.png'],
   'image/jpeg': ['.jpg', '.jpeg'],
+  'image/webp': ['.webp'],
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
   'text/csv': ['.csv'],
   'text/plain': ['.txt'],
   'text/html': ['.html', '.htm'],
+  'application/json': ['.json'],
 };
 
 interface Props {
   folderId: string | null;
-  onUploaded: (file: any) => void;
+  onUploaded: (file: VaultFile) => void;
   onClose: () => void;
+  onError?: (message: string) => void;
 }
 
-export default function DropZone({ folderId, onUploaded, onClose }: Props) {
+export default function DropZone({ folderId, onUploaded, onClose, onError }: Props) {
   const [uploading, setUploading] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [done, setDone] = useState<string[]>([]);
 
-  const uploadFile = async (file: File) => {
-    const fd = new FormData();
-    fd.append('file', file);
-    if (folderId) fd.append('folder_id', folderId);
-    const res = await fetch('/api/upload', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
-    return data;
-  };
+  const uploadFile = useCallback(async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (folderId) formData.append('folder_id', folderId);
 
-  const onDrop = useCallback(async (accepted: File[]) => {
-    setErrors([]); setDone([]);
-    setUploading(accepted.map(f => f.name));
-    const errs: string[] = [];
+    const response = await fetch('/api/upload', { method: 'POST', body: formData });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      // The fallback below covers non-JSON server failures.
+    }
+    if (!response.ok) throw new Error(data?.error || 'Upload failed.');
+    return data as VaultFile;
+  }, [folderId]);
+
+  const handleAcceptedFiles = useCallback(async (acceptedFiles: File[]) => {
+    if (!acceptedFiles.length) return;
+
+    setErrors([]);
+    setDone([]);
+    setUploading(acceptedFiles.map(file => file.name));
+
+    const failed: string[] = [];
     const succeeded: string[] = [];
-    for (const file of accepted) {
+
+    for (const file of acceptedFiles) {
       try {
         const result = await uploadFile(file);
         onUploaded(result);
         succeeded.push(file.name);
-      } catch (e: any) {
-        errs.push(`${file.name}: ${e.message}`);
+      } catch (uploadError) {
+        const message = `${file.name}: ${uploadError instanceof Error ? uploadError.message : 'Upload failed.'}`;
+        failed.push(message);
+      } finally {
+        setUploading(previous => previous.filter(name => name !== file.name));
       }
-      setUploading(prev => prev.filter(n => n !== file.name));
     }
-    setDone(succeeded);
-    setErrors(errs);
-    if (!errs.length) setTimeout(onClose, 1200);
-  }, [folderId, onUploaded, onClose]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: ACCEPTED, multiple: true });
+    setDone(succeeded);
+    setErrors(failed);
+    if (failed.length) onError?.(`${failed.length} ${failed.length === 1 ? 'file' : 'files'} could not be uploaded.`);
+    if (!failed.length) window.setTimeout(onClose, 900);
+  }, [onClose, onError, onUploaded, uploadFile]);
+
+  const handleRejectedFiles = useCallback((rejections: FileRejection[]) => {
+    const messages = rejections.map(({ file, errors: rejectionErrors }) => {
+      const reason = rejectionErrors.map(error => error.message).join(', ');
+      return `${file.name}: ${reason}`;
+    });
+    setErrors(messages);
+    setDone([]);
+    onError?.('One or more files use an unsupported format.');
+  }, [onError]);
+
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+    onDropAccepted: handleAcceptedFiles,
+    onDropRejected: handleRejectedFiles,
+    accept: ACCEPTED,
+    multiple: true,
+    noClick: true,
+    noKeyboard: true,
+  });
+
+  const isUploading = uploading.length > 0;
 
   return (
-    <div className="relative rounded-2xl overflow-hidden">
-      <div className="relative glass-card p-1 overflow-hidden">
-        <div className="shim" />
-        <div
-          {...getRootProps()}
-          className={`drop-zone p-10 text-center ${isDragActive ? 'active' : ''}`}
-        >
-          <input {...getInputProps()} />
-
-          {uploading.length > 0 ? (
-            <div className="space-y-3">
-              <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-sm text-slate-300 font-medium">Uploading {uploading.length} file{uploading.length > 1 ? 's' : ''}…</p>
-              <div className="space-y-1 text-xs text-slate-600">
-                {uploading.map(n => <div key={n} className="truncate">{n}</div>)}
-              </div>
-            </div>
+    <div className="upload-content">
+      <div
+        {...getRootProps()}
+        className={isDragActive ? 'drop-zone active' : 'drop-zone'}
+        aria-busy={isUploading}
+      >
+        <input {...getInputProps()} />
+        <span className="drop-zone-icon" aria-hidden="true">
+          {isUploading ? (
+            <span className="spinner large" />
           ) : done.length > 0 ? (
-            <div className="space-y-2">
-              <div className="w-10 h-10 mx-auto flex items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(52,211,153,0.85)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              </div>
-              <p className="text-sm text-emerald-400 font-medium">{done.length} file{done.length > 1 ? 's' : ''} uploaded</p>
-            </div>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m5 12 4 4L19 6" />
+            </svg>
           ) : (
-            <div className="space-y-3">
-              <div className="upload-orb w-16 h-16 mx-auto flex items-center justify-center rounded-2xl">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(147,197,253,0.85)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-200">{isDragActive ? 'Release to upload' : 'Drop files here or click to browse'}</p>
-                <p className="text-xs text-slate-600 mt-1.5">Upload PDFs, images, documents, spreadsheets, text files, and HTML.</p>
-              </div>
-            </div>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M4 17v3h16v-3" />
+            </svg>
           )}
-        </div>
-        {errors.length > 0 && (
-          <div className="px-4 pb-4 space-y-1">
-            {errors.map((e, i) => <p key={i} className="text-xs text-red-400">{e}</p>)}
+        </span>
+
+        {isUploading ? (
+          <div className="drop-zone-copy">
+            <h3>Uploading {uploading.length} {uploading.length === 1 ? 'file' : 'files'}…</h3>
+            <p>Please keep this window open until the upload finishes.</p>
+            <div className="upload-file-list">{uploading.map(name => <span key={name}>{name}</span>)}</div>
+          </div>
+        ) : done.length > 0 && !errors.length ? (
+          <div className="drop-zone-copy success">
+            <h3>{done.length} {done.length === 1 ? 'file' : 'files'} uploaded</h3>
+            <p>The vault is updating now.</p>
+          </div>
+        ) : (
+          <div className="drop-zone-copy">
+            <h3>{isDragActive ? 'Release to upload' : 'Drag files into this area'}</h3>
+            <p>PDF, image, Word, spreadsheet, CSV, text, HTML, and JSON files are supported.</p>
+            <button type="button" className="primary-action" onClick={event => {
+              event.stopPropagation();
+              open();
+            }}>
+              Choose Files
+            </button>
           </div>
         )}
       </div>
+
+      {errors.length > 0 && (
+        <div className="upload-errors" role="alert">
+          <strong>Some files were not uploaded</strong>
+          {errors.map((message, index) => <p key={`${message}-${index}`}>{message}</p>)}
+        </div>
+      )}
     </div>
   );
 }
