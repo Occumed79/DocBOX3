@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 export interface VaultFile {
   id: string;
@@ -18,302 +19,326 @@ export interface VaultFile {
   headline?: string;
 }
 
-export function typeClass(t: string) {
-  if (['png','jpg','jpeg'].includes(t)) return 't-img';
-  const map: Record<string,string> = { pdf:'t-pdf', docx:'t-docx', xlsx:'t-xlsx', csv:'t-csv', txt:'t-txt', html:'t-html', htm:'t-html' };
-  return map[t] || 't-other';
+export function typeClass(type: string) {
+  const normalized = type.toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(normalized)) return 'type-image';
+  const classes: Record<string, string> = {
+    pdf: 'type-pdf',
+    docx: 'type-document',
+    xlsx: 'type-sheet',
+    csv: 'type-sheet',
+    txt: 'type-text',
+    json: 'type-code',
+    html: 'type-code',
+    htm: 'type-code',
+  };
+  return classes[normalized] || 'type-other';
 }
 
 export function formatSize(bytes: number) {
   if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes/1024).toFixed(1)} KB`;
-  return `${(bytes/1048576).toFixed(1)} MB`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(1)} GB`;
 }
 
-export function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+export function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 interface Props {
   file: VaultFile;
   selected?: boolean;
-  onSelect: (f: VaultFile) => void;
-  onUpdate: (f: VaultFile) => void;
-  onDelete: (id: string) => void;
+  onSelect: (file: VaultFile) => void;
+  onUpdate: (file: VaultFile) => void;
+  onRemove: (id: string) => void;
+  onError?: (message: string) => void;
   searchMode?: boolean;
+  archivedView?: boolean;
 }
 
 function stripHtml(value?: string) {
   return (value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function PreviewFrame({ children, tone = 'blue' }: { children: ReactNode; tone?: 'blue' | 'red' | 'green' | 'violet' | 'cyan' | 'slate' }) {
-  const tones = {
-    blue: 'from-sky-400/25 via-blue-500/10 to-slate-950/75',
-    red: 'from-rose-400/25 via-blue-500/10 to-slate-950/75',
-    green: 'from-emerald-400/25 via-cyan-500/10 to-slate-950/75',
-    violet: 'from-violet-400/25 via-sky-500/10 to-slate-950/75',
-    cyan: 'from-cyan-300/25 via-teal-500/10 to-slate-950/75',
-    slate: 'from-slate-300/20 via-sky-500/10 to-slate-950/75',
-  };
-
-  return (
-    <div className={`relative z-10 flex h-40 w-full items-center justify-center overflow-hidden rounded-[22px] border border-white/10 bg-gradient-to-br ${tones[tone]} shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_16px_36px_rgba(0,0,0,0.22)]`}>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.22),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.10),transparent_36%,rgba(255,255,255,0.05)_68%,transparent)]" />
-      {children}
-    </div>
-  );
-}
-
-function PreviewLines() {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="h-1.5 w-[72%] rounded-full bg-slate-700/15" />
-      <span className="h-1.5 w-[92%] rounded-full bg-slate-700/15" />
-      <span className="h-1.5 w-[84%] rounded-full bg-slate-700/15" />
-      <span className="h-1.5 w-[58%] rounded-full bg-slate-700/15" />
-    </div>
-  );
-}
-
-function decodeDataUrl(url: string) {
-  const comma = url.indexOf(',');
-  if (comma === -1) return '';
-  const meta = url.slice(0, comma);
-  const payload = url.slice(comma + 1);
+async function responseError(response: Response, fallback: string) {
   try {
-    return meta.includes(';base64') ? atob(payload) : decodeURIComponent(payload);
+    const payload = await response.json();
+    return payload?.error || fallback;
   } catch {
-    return '';
+    return fallback;
   }
 }
 
-function PreviewArtwork({ file }: { file: VaultFile }) {
+function IconButton({ label, children, onClick, className = '', disabled = false }: {
+  label: string;
+  children: ReactNode;
+  onClick: () => void;
+  className?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`card-icon-action ${className}`}
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FileArtwork({ file }: { file: VaultFile }) {
   const type = file.file_type.toLowerCase();
   const summary = stripHtml(file.headline) || file.notes || file.original_name;
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [textPreview, setTextPreview] = useState('');
-  const isTextLike = ['txt','csv','json'].includes(type);
 
-  useEffect(() => {
-    let active = true;
-    setPreviewUrl(null);
-    setTextPreview('');
-
-    fetch(`/api/preview?id=${encodeURIComponent(file.id)}`)
-      .then(response => response.ok ? response.json() : null)
-      .then(async data => {
-        if (!active || !data?.url) return;
-        setPreviewUrl(data.url);
-
-        if (isTextLike) {
-          if (data.url.startsWith('data:')) {
-            setTextPreview(decodeDataUrl(data.url).slice(0, 900));
-          } else {
-            try {
-              const text = await fetch(data.url).then(response => response.text());
-              if (active) setTextPreview(text.slice(0, 900));
-            } catch {
-              if (active) setTextPreview('');
-            }
-          }
-        }
-      })
-      .catch(() => {
-        if (active) setPreviewUrl(null);
-      });
-
-    return () => { active = false; };
-  }, [file.id, isTextLike]);
-
-  if (['png','jpg','jpeg'].includes(type) && previewUrl) {
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(type)) {
     return (
-      <PreviewFrame tone="cyan">
-        <img src={previewUrl} alt={file.name} className="relative z-10 h-full w-full object-cover" />
-      </PreviewFrame>
-    );
-  }
-
-  if (type === 'pdf' && previewUrl) {
-    return (
-      <PreviewFrame tone="red">
-        <iframe title={`${file.name} preview`} src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH`} className="relative z-10 h-full w-full rounded-[20px] bg-white/95" style={{ border: 0, pointerEvents: 'none' }} />
-        <div className="absolute bottom-3 right-3 z-20 rounded-full bg-rose-500/90 px-2.5 py-1 text-[10px] font-black tracking-wider text-white shadow-lg">PDF</div>
-      </PreviewFrame>
-    );
-  }
-
-  if (['html','htm'].includes(type) && previewUrl) {
-    return (
-      <PreviewFrame tone="violet">
-        <iframe title={`${file.name} page preview`} src={previewUrl} sandbox="" className="relative z-10 h-full w-full rounded-[20px] bg-white" style={{ border: 0, pointerEvents: 'none', transform: 'scale(0.86)', width: '116%', height: '116%' }} />
-      </PreviewFrame>
-    );
-  }
-
-  if (isTextLike && textPreview) {
-    const lines = textPreview.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(0, 8);
-    return (
-      <PreviewFrame tone={type === 'csv' ? 'green' : 'violet'}>
-        <div className="relative z-10 h-[78%] w-[78%] rotate-[-1deg] overflow-hidden rounded-2xl bg-slate-50/95 p-4 text-left shadow-2xl">
-          <div className="mb-3 h-4 w-1/2 rounded-full bg-blue-400/20" />
-          <div className="space-y-1.5 font-mono text-[9px] leading-tight text-slate-600/80">
-            {lines.map((line, index) => <p key={index} className="truncate">{line}</p>)}
-          </div>
-        </div>
-      </PreviewFrame>
+      <div className="file-artwork artwork-image" aria-hidden="true">
+        <div className="artwork-sun" />
+        <div className="artwork-mountain mountain-back" />
+        <div className="artwork-mountain mountain-front" />
+        <span className="artwork-label">IMAGE</span>
+      </div>
     );
   }
 
   if (type === 'pdf') {
     return (
-      <PreviewFrame tone="red">
-        <div className="relative z-10 h-[78%] w-[68%] rotate-[-2deg] rounded-2xl bg-slate-50/95 p-4 shadow-2xl">
-          <div className="mb-3 h-4 w-1/2 rounded-full bg-rose-400/20" />
-          <PreviewLines />
-          <div className="absolute bottom-3 right-3 rounded-full bg-rose-500/90 px-2.5 py-1 text-[10px] font-black tracking-wider text-white">PDF</div>
+      <div className="file-artwork artwork-pdf" aria-hidden="true">
+        <div className="paper-sheet">
+          <span className="paper-heading" />
+          <span className="paper-line wide" />
+          <span className="paper-line" />
+          <span className="paper-line medium" />
+          <span className="paper-line wide" />
+          <strong>PDF</strong>
         </div>
-      </PreviewFrame>
+      </div>
     );
   }
 
-  if (['html','htm'].includes(type)) {
+  if (['xlsx', 'csv'].includes(type)) {
     return (
-      <PreviewFrame tone="violet">
-        <div className="relative z-10 flex h-full w-full flex-col items-start p-4">
-          <div className="mb-4 flex gap-1.5"><span className="h-2 w-2 rounded-full bg-white/25" /><span className="h-2 w-2 rounded-full bg-white/20" /><span className="h-2 w-2 rounded-full bg-white/15" /></div>
-          <div className="mb-3 h-10 w-[72%] rounded-2xl bg-gradient-to-r from-cyan-300/45 to-violet-400/30" />
-          <div className="mb-2 h-1.5 w-[82%] rounded-full bg-white/15" />
-          <div className="mb-3 h-1.5 w-[54%] rounded-full bg-white/12" />
-          <p className="line-clamp-2 text-[11px] leading-snug text-slate-200/70">{summary || 'Saved page preview'}</p>
+      <div className="file-artwork artwork-sheet" aria-hidden="true">
+        <div className="sheet-grid">
+          {Array.from({ length: 30 }).map((_, index) => <span key={index} className={index < 6 ? 'heading-cell' : ''} />)}
         </div>
-      </PreviewFrame>
+        <span className="artwork-label">SHEET</span>
+      </div>
     );
   }
 
-  if (['xlsx','csv'].includes(type)) {
+  if (['html', 'htm', 'json'].includes(type)) {
     return (
-      <PreviewFrame tone="green">
-        <div className="relative z-10 grid w-[70%] rotate-[-2deg] grid-cols-6 gap-1.5">
-          {Array.from({ length: 24 }).map((_, i) => <span key={i} className="h-3.5 rounded bg-white/18 ring-1 ring-white/10" />)}
+      <div className="file-artwork artwork-code" aria-hidden="true">
+        <div className="browser-chrome"><span /><span /><span /></div>
+        <div className="code-lines">
+          <span className="code-purple" /><span className="code-blue" /><span className="code-cyan" /><span className="code-purple short" /><span className="code-blue medium" />
         </div>
-        <div className="absolute bottom-3 right-3 z-10 rounded-full bg-black/30 px-2.5 py-1 text-[10px] font-black tracking-wider text-white/90 ring-1 ring-white/10 backdrop-blur">SHEET</div>
-      </PreviewFrame>
-    );
-  }
-
-  if (['docx','txt','json'].includes(type)) {
-    return (
-      <PreviewFrame tone={type === 'docx' ? 'blue' : 'violet'}>
-        <div className="relative z-10 h-[78%] w-[68%] rotate-[-2deg] rounded-2xl bg-slate-50/95 p-4 shadow-2xl">
-          <div className="mb-3 h-4 w-1/2 rounded-full bg-blue-400/20" />
-          <PreviewLines />
-          {summary && <p className="mt-3 line-clamp-2 text-[10px] leading-snug text-slate-600/70">{summary}</p>}
-        </div>
-      </PreviewFrame>
+        <span className="artwork-label">{type === 'json' ? 'JSON' : 'WEB'}</span>
+      </div>
     );
   }
 
   return (
-    <PreviewFrame tone="slate">
-      <span className={`tbadge ${typeClass(type)} relative z-10 scale-125`}>{type.toUpperCase()}</span>
-    </PreviewFrame>
+    <div className="file-artwork artwork-document" aria-hidden="true">
+      <div className="document-sheet">
+        <span className="document-heading" />
+        <span className="document-line wide" />
+        <span className="document-line" />
+        <span className="document-line medium" />
+        {summary && <span className="document-summary">{summary.slice(0, 92)}</span>}
+      </div>
+      <span className="artwork-label">{type.toUpperCase() || 'FILE'}</span>
+    </div>
   );
 }
 
-export default function FileCard({ file, selected, onSelect, onUpdate, onDelete, searchMode }: Props) {
-  const [editNotes, setEditNotes] = useState(false);
+export default function FileCard({ file, selected, onSelect, onUpdate, onRemove, onError, searchMode, archivedView }: Props) {
+  const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState(file.notes || '');
-
-  const saveNotes = async () => {
-    const res = await fetch('/api/files', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: file.id, notes }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      onUpdate({ ...file, notes: updated.notes });
-    }
-    setEditNotes(false);
-  };
-
-  const archive = async () => {
-    if (!confirm(`Archive "${file.name}"?`)) return;
-    await fetch('/api/files', {
-      method:'PATCH',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: file.id, is_archived: true }),
-    });
-    onDelete(file.id);
-  };
-
-  const removeFile = async () => {
-    if (!confirm(`Delete "${file.name}"?`)) return;
-    await fetch('/api/files', {
-      method:'DELETE',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id: file.id }),
-    });
-    onDelete(file.id);
-  };
-
+  const [pending, setPending] = useState(false);
+  const fileType = file.file_type.toLowerCase();
   const headline = stripHtml(file.headline);
 
-  return (
-    <div className={`glass-card relative min-h-[288px] cursor-pointer overflow-hidden rounded-[28px] p-3.5 transition-all duration-300 hover:-translate-y-1 group fade-up ${selected ? 'selected' : ''}`} onClick={() => onSelect(file)}>
-      {selected && <div className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28),0_0_54px_rgba(91,154,255,0.16)]" />}
-      <div className="shim" />
+  useEffect(() => {
+    setNotes(file.notes || '');
+  }, [file.id, file.notes]);
 
-      <div className="absolute right-3 top-3 z-20 flex translate-y-[-4px] gap-1 rounded-full border border-white/10 bg-black/30 p-1 opacity-0 backdrop-blur-xl transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100" onClick={event => event.stopPropagation()}>
-        <button title="Add note" aria-label="Add note" onClick={() => setEditNotes(!editNotes)} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100 hover:bg-white/20">✎</button>
-        <a title="Download" aria-label="Download" href={file.storage_url} download={file.original_name} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100 no-underline hover:bg-white/20">↓</a>
-        <button title="Archive" aria-label="Archive" onClick={archive} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100 hover:bg-white/20">▣</button>
-        <button title="Delete" aria-label="Delete" onClick={removeFile} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15 text-xs font-semibold text-red-200 hover:bg-red-500/25">×</button>
+  const saveNotes = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      const response = await fetch('/api/files', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: file.id, notes }),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'Could not save notes.'));
+      const updated = await response.json();
+      onUpdate({ ...file, notes: updated.notes });
+      setEditingNotes(false);
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : 'Could not save notes.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const changeArchiveState = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      const nextArchived = !file.is_archived;
+      const response = await fetch('/api/files', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: file.id, is_archived: nextArchived }),
+      });
+      if (!response.ok) throw new Error(await responseError(response, nextArchived ? 'Could not archive the file.' : 'Could not restore the file.'));
+      onRemove(file.id);
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : 'Could not update the file.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const deleteFile = async () => {
+    if (pending || !window.confirm(`Permanently delete “${file.name}”?`)) return;
+    setPending(true);
+    try {
+      const response = await fetch('/api/files', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: file.id }),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'Could not delete the file.'));
+      onRemove(file.id);
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : 'Could not delete the file.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleKeyboard = (event: KeyboardEvent<HTMLElement>) => {
+    if (editingNotes) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect(file);
+    }
+  };
+
+  return (
+    <article
+      className={selected ? 'file-card selected' : 'file-card'}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`Open inspector for ${file.name}`}
+      onClick={() => onSelect(file)}
+      onKeyDown={handleKeyboard}
+    >
+      <div className="card-action-group" onClick={event => event.stopPropagation()}>
+        <IconButton label={file.notes ? 'Edit note' : 'Add note'} onClick={() => setEditingNotes(previous => !previous)} disabled={pending}>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z" />
+          </svg>
+        </IconButton>
+        <a
+          className="card-icon-action"
+          href={file.storage_url}
+          download={file.original_name}
+          aria-label={`Download ${file.name}`}
+          title="Download"
+          onClick={event => event.stopPropagation()}
+        >
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+          </svg>
+        </a>
+        <IconButton label={file.is_archived || archivedView ? 'Restore file' : 'Archive file'} onClick={() => void changeArchiveState()} disabled={pending}>
+          {file.is_archived || archivedView ? (
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
+            </svg>
+          ) : (
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M5 6v14h14V6" /><path d="M9 10h6" /><path d="M4 3h16v3H4z" />
+            </svg>
+          )}
+        </IconButton>
+        <IconButton label="Delete file" className="destructive" onClick={() => void deleteFile()} disabled={pending}>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 15h10l1-15" /><path d="M10 11v6M14 11v6" />
+          </svg>
+        </IconButton>
       </div>
 
-      <PreviewArtwork file={file} />
+      <FileArtwork file={file} />
 
-      <div className="relative z-10 px-0.5 pt-3.5">
-        <div className="flex items-start gap-2.5">
-          <p className="line-clamp-2 flex-1 text-[14px] font-bold leading-tight text-white/95">{file.name}</p>
-          <span className={`tbadge ${typeClass(file.file_type)} shrink-0`}>{file.file_type.toUpperCase()}</span>
+      <div className="file-card-body">
+        <div className="file-title-row">
+          <h2 title={file.name}>{file.name}</h2>
+          <span className={`type-badge ${typeClass(fileType)}`}>{fileType.toUpperCase() || 'FILE'}</span>
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-slate-400/80">
+        <div className="file-metadata">
           <span>{formatSize(file.size_bytes)}</span>
           <span>{formatDate(file.upload_date)}</span>
           {searchMode && file.folder_name && <span>{file.folder_name}</span>}
         </div>
 
         {file.tags?.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {file.tags.slice(0, 3).map(tag => <span key={tag} className="rounded-full border border-sky-300/15 bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-100/80">{tag}</span>)}
+          <div className="file-tags">
+            {file.tags.slice(0, 3).map(tag => <span key={tag}>{tag}</span>)}
+            {file.tags.length > 3 && <span>+{file.tags.length - 3}</span>}
           </div>
         )}
 
-        {headline && <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-400/80">{headline}</p>}
+        {headline && <p className="file-headline">{headline}</p>}
 
-        {editNotes ? (
-          <div className="mt-2 flex gap-2" onClick={event => event.stopPropagation()}>
+        {editingNotes ? (
+          <div className="card-note-editor" onClick={event => event.stopPropagation()}>
+            <label className="sr-only" htmlFor={`card-note-${file.id}`}>Note for {file.name}</label>
             <input
+              id={`card-note-${file.id}`}
               autoFocus
               value={notes}
               onChange={event => setNotes(event.target.value)}
-              placeholder="Add a note..."
-              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-100 outline-none focus:border-sky-300/40"
+              placeholder="Add a note…"
               onKeyDown={event => {
-                if (event.key === 'Enter') saveNotes();
-                if (event.key === 'Escape') setEditNotes(false);
+                event.stopPropagation();
+                if (event.key === 'Enter') void saveNotes();
+                if (event.key === 'Escape') {
+                  setNotes(file.notes || '');
+                  setEditingNotes(false);
+                }
               }}
             />
-            <button onClick={saveNotes} className="rounded-full bg-blue-500/80 px-3 text-[11px] font-bold text-white">Save</button>
+            <button type="button" onClick={event => {
+              event.stopPropagation();
+              void saveNotes();
+            }} disabled={pending}>Save</button>
           </div>
         ) : file.notes ? (
-          <p className="mt-2 line-clamp-2 cursor-pointer text-[11px] italic leading-relaxed text-slate-400/80 hover:text-slate-200" onClick={event => { event.stopPropagation(); setEditNotes(true); }}>{file.notes}</p>
+          <p className="file-note" onClick={event => {
+            event.stopPropagation();
+            setEditingNotes(true);
+          }}>{file.notes}</p>
         ) : null}
       </div>
-    </div>
+    </article>
   );
 }
