@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import SearchBar from './SearchBar';
-import FileCard, { type VaultFile } from './FileCard';
-import EmptyState, { type NavView } from './EmptyState';
+import type { VaultFile } from './FileCard';
 import UploadSheet from './UploadSheet';
 import VaultInspector from './VaultInspector';
+import FileStage from './FileStage';
+import FileRail from './FileRail';
+import LuminousBackdrop from './LuminousBackdrop';
 import { ArchiveIcon, CloseIcon, FilesIcon, FolderIcon, PlusIcon, UploadIcon } from './icons';
 
 export interface Folder {
@@ -15,6 +17,8 @@ export interface Folder {
   color: string;
   file_count: number;
 }
+
+type NavView = 'all' | 'archive';
 
 async function readError(response: Response, fallback: string) {
   try {
@@ -83,6 +87,20 @@ export default function VaultApp() {
     return () => { document.body.style.overflow = previousOverflow; };
   }, [showUpload]);
 
+  const displayFiles = isSearching ? searchResults : files;
+
+  useEffect(() => {
+    if (loading) return;
+    if (!displayFiles.length) {
+      setSelectedFile(null);
+      return;
+    }
+    setSelectedFile(current => {
+      if (!current) return displayFiles[0];
+      return displayFiles.find(file => file.id === current.id) || displayFiles[0];
+    });
+  }, [displayFiles, loading]);
+
   const navigateTo = useCallback((view: NavView, folderId: string | null = null) => {
     setNavView(view);
     setActiveFolder(view === 'archive' ? null : folderId);
@@ -97,7 +115,7 @@ export default function VaultApp() {
     setSearchResults(results);
     setSearchQuery(query);
     setIsSearching(true);
-    setSelectedFile(null);
+    setSelectedFile(results[0] || null);
     setError(null);
   }, []);
 
@@ -133,12 +151,8 @@ export default function VaultApp() {
     try {
       const response = await fetch('/api/folders', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: folder.id }) });
       if (!response.ok) throw new Error(await readError(response, 'Could not delete the folder.'));
-      if (activeFolder === folder.id) {
-        navigateTo('all');
-        await loadFolders();
-      } else {
-        await Promise.all([loadFolders(), loadFiles()]);
-      }
+      if (activeFolder === folder.id) navigateTo('all');
+      await Promise.all([loadFolders(), loadFiles()]);
     } catch (mutationError) {
       reportError(mutationError instanceof Error ? mutationError.message : 'Could not delete the folder.');
     } finally {
@@ -148,7 +162,6 @@ export default function VaultApp() {
 
   const openUpload = useCallback(() => {
     if (navView === 'archive') navigateTo('all');
-    setSelectedFile(null);
     setShowUpload(true);
   }, [navView, navigateTo]);
 
@@ -157,8 +170,8 @@ export default function VaultApp() {
     setIsSearching(false);
     setSearchQuery('');
     setSearchResults([]);
-    setSelectedFile(null);
     setFiles(previous => (uploaded.folder_id || null) === activeFolder ? [uploaded, ...previous.filter(file => file.id !== uploaded.id)] : previous);
+    setSelectedFile(uploaded);
     void loadFolders();
   }, [activeFolder, loadFolders]);
 
@@ -175,76 +188,62 @@ export default function VaultApp() {
     void loadFolders();
   }, [loadFolders]);
 
-  const displayFiles = isSearching ? searchResults : files;
   const rootFolders = useMemo(() => folders.filter(folder => !folder.parent_id), [folders]);
   const activeFolderName = activeFolder ? folders.find(folder => folder.id === activeFolder)?.name : null;
-  const sectionTitle = isSearching ? `Search results for “${searchQuery}”` : activeFolderName || (navView === 'archive' ? 'Archive' : 'All Files');
+  const viewTitle = isSearching ? `Results for “${searchQuery}”` : activeFolderName || (navView === 'archive' ? 'Archive' : 'All Files');
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="command-bar control-glass">
-          <button className="brand-lockup" type="button" onClick={() => navigateTo('all')} aria-label="Open All Files">
-            <span className="brand-mark" aria-hidden="true"><span className="brand-mark-layer brand-mark-layer-back" /><span className="brand-mark-layer brand-mark-layer-front" /><span className="brand-mark-glyph">SV</span></span>
-            <span className="brand-copy"><strong>Source Vault</strong><span>Shared file workspace</span></span>
+    <div className="cosmic-vault-shell">
+      <LuminousBackdrop />
+
+      <div className="cosmic-vault-ui">
+        <header className="cosmic-command-bar">
+          <button type="button" className="cosmic-brand" onClick={() => navigateTo('all')} aria-label="Open All Files">
+            <span className="cosmic-brand-mark" aria-hidden="true"><span>SV</span></span>
+            <span><strong>Source Vault</strong><small>Luminous file workspace</small></span>
           </button>
+          <div className="cosmic-search"><SearchBar onResults={handleSearchResults} onClear={handleSearchClear} onError={reportError} /></div>
+          <button type="button" className="cosmic-upload-button" onClick={openUpload}><UploadIcon /><span>Upload</span></button>
+        </header>
 
-          <nav className="primary-nav" aria-label="Primary navigation">
-            <button type="button" className={navView === 'all' && !isSearching ? 'nav-control active' : 'nav-control'} onClick={() => navigateTo('all')} aria-current={navView === 'all' && !isSearching ? 'page' : undefined}><FilesIcon /><span>All Files</span></button>
-            <button type="button" className={navView === 'archive' && !isSearching ? 'nav-control active' : 'nav-control'} onClick={() => navigateTo('archive')} aria-current={navView === 'archive' && !isSearching ? 'page' : undefined}><ArchiveIcon /><span>Archive</span></button>
-          </nav>
+        {error && <div className="cosmic-status-banner" role="alert"><span>{error}</span><button type="button" onClick={() => setError(null)} aria-label="Dismiss error"><CloseIcon /></button></div>}
 
-          <div className="command-actions"><button type="button" className="primary-action" onClick={openUpload}><UploadIcon /><span>Upload</span></button></div>
-        </div>
+        <main className={selectedFile ? 'cosmic-workspace has-inspector' : 'cosmic-workspace'}>
+          <aside className="cosmic-sidebar">
+            <div className="sidebar-heading"><span>Library</span><strong>{displayFiles.length}</strong></div>
+            <nav className="sidebar-nav" aria-label="Library navigation">
+              <button type="button" className={navView === 'all' && !isSearching && !activeFolder ? 'active' : ''} onClick={() => navigateTo('all')}><FilesIcon /><span>All Files</span></button>
+              <button type="button" className={navView === 'archive' && !isSearching ? 'active' : ''} onClick={() => navigateTo('archive')}><ArchiveIcon /><span>Archive</span></button>
+            </nav>
 
-        <div className="search-region"><SearchBar onResults={handleSearchResults} onClear={handleSearchClear} onError={reportError} /></div>
-
-        <div className="folder-toolbar control-glass" aria-label="Folders">
-          <div className="folder-scroll">
-            <button type="button" onClick={() => navigateTo('all')} className={!activeFolder && !isSearching && navView === 'all' ? 'folder-pill active' : 'folder-pill'} aria-current={!activeFolder && !isSearching && navView === 'all' ? 'page' : undefined}>All</button>
-            {rootFolders.map(folder => (
-              <div key={folder.id} className={activeFolder === folder.id && !isSearching ? 'folder-group active' : 'folder-group'}>
-                <button type="button" onClick={() => navigateTo('all', folder.id)} className="folder-pill folder-select" aria-current={activeFolder === folder.id && !isSearching ? 'page' : undefined}><FolderIcon color={folder.color} /><span>{folder.name}</span><span className="folder-count" aria-label={`${folder.file_count} files`}>{folder.file_count}</span></button>
-                <button type="button" className="folder-remove" onClick={() => void deleteFolder(folder)} aria-label={`Delete ${folder.name} folder`} title={`Delete ${folder.name}`}><CloseIcon /></button>
+            <div className="sidebar-folders">
+              <div className="sidebar-section-title"><span>Folders</span><button type="button" onClick={() => setShowNewFolder(true)} aria-label="Create folder"><PlusIcon /></button></div>
+              {showNewFolder && (
+                <div className="sidebar-folder-form">
+                  <input autoFocus value={newFolderName} onChange={event => setNewFolderName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void createFolder(); if (event.key === 'Escape') { setShowNewFolder(false); setNewFolderName(''); } }} placeholder="Folder name" disabled={folderMutation} />
+                  <button type="button" onClick={() => void createFolder()} disabled={folderMutation || !newFolderName.trim()}>Create</button>
+                </div>
+              )}
+              <div className="sidebar-folder-list">
+                {rootFolders.map(folder => (
+                  <div key={folder.id} className={activeFolder === folder.id && !isSearching ? 'sidebar-folder active' : 'sidebar-folder'}>
+                    <button type="button" onClick={() => navigateTo('all', folder.id)}><FolderIcon color="currentColor" /><span>{folder.name}</span><small>{folder.file_count}</small></button>
+                    <button type="button" className="sidebar-folder-delete" onClick={() => void deleteFolder(folder)} aria-label={`Delete ${folder.name}`}><CloseIcon /></button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          </aside>
 
-          <div className="folder-create-area">
-            {showNewFolder ? (
-              <div className="folder-create-form">
-                <label className="sr-only" htmlFor="new-folder-name">Folder name</label>
-                <input id="new-folder-name" autoFocus value={newFolderName} onChange={event => setNewFolderName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void createFolder(); if (event.key === 'Escape') { setShowNewFolder(false); setNewFolderName(''); } }} placeholder="Folder name" disabled={folderMutation} />
-                <button type="button" className="compact-action primary" onClick={() => void createFolder()} disabled={folderMutation || !newFolderName.trim()}>Create</button>
-                <button type="button" className="icon-action" onClick={() => { setShowNewFolder(false); setNewFolderName(''); }} aria-label="Cancel creating folder"><CloseIcon /></button>
-              </div>
-            ) : <button type="button" className="compact-action" onClick={() => setShowNewFolder(true)}><PlusIcon /><span>New Folder</span></button>}
-          </div>
-        </div>
-      </header>
+          <section className="cosmic-stage-column" aria-labelledby="current-view-title">
+            <div className="view-heading"><div><p>Current View</p><h2 id="current-view-title">{viewTitle}</h2></div><span>{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span></div>
+            <FileStage file={selectedFile} onUpload={openUpload} />
+            <FileRail files={displayFiles} selectedFile={selectedFile} onSelect={setSelectedFile} loading={loading} />
+          </section>
 
-      <main className={selectedFile ? 'workspace with-inspector' : 'workspace'}>
-        <section className="library-panel" aria-labelledby="library-heading">
-          <div className="content-toolbar">
-            <div><p className="content-eyebrow">File Library</p><div className="content-title-row"><h1 id="library-heading">{sectionTitle}</h1><span className="file-count-label">{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span></div></div>
-            <div className="content-actions">{selectedFile && <button type="button" className="compact-action" onClick={() => setSelectedFile(null)}>Close Inspector</button>}<button type="button" className="compact-action primary" onClick={openUpload}><UploadIcon /><span>Upload</span></button></div>
-          </div>
-
-          {error && <div className="status-banner error" role="alert"><span>{error}</span><button type="button" onClick={() => setError(null)} aria-label="Dismiss error"><CloseIcon /></button></div>}
-
-          <div className="file-list-scroll">
-            {loading ? (
-              <div className="file-grid" aria-label="Loading files" aria-busy="true">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="file-card-skeleton" />)}</div>
-            ) : displayFiles.length === 0 ? (
-              <EmptyState isSearching={isSearching} searchQuery={searchQuery} navView={navView} activeFolderName={activeFolderName} onUpload={openUpload} onCreateFolder={() => setShowNewFolder(true)} />
-            ) : (
-              <div className="file-grid">{displayFiles.map(file => <FileCard key={file.id} file={file} selected={selectedFile?.id === file.id} onSelect={setSelectedFile} onUpdate={handleUpdate} onRemove={handleRemove} onError={reportError} searchMode={isSearching} archivedView={navView === 'archive'} />)}</div>
-            )}
-          </div>
-        </section>
-
-        {selectedFile && <VaultInspector file={selectedFile} onClose={() => setSelectedFile(null)} onUpdate={handleUpdate} onRemove={handleRemove} onError={reportError} />}
-      </main>
+          {selectedFile && <VaultInspector file={selectedFile} onClose={() => setSelectedFile(null)} onUpdate={handleUpdate} onRemove={handleRemove} onError={reportError} />}
+        </main>
+      </div>
 
       {showUpload && <UploadSheet folderId={activeFolder} folderName={activeFolderName} onUploaded={handleUploaded} onClose={() => setShowUpload(false)} onError={reportError} />}
     </div>
