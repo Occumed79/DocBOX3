@@ -44,6 +44,25 @@ textarea:focus-visible,
   border-top-color: #e69cff !important;
 }
 
+.staging-empty,
+.staging-queue {
+  width: 100%;
+  align-self: stretch;
+}
+
+.drop-zone:has(.staging-queue) {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 16px;
+  text-align: left;
+}
+
+.preview-modal .full-text-preview {
+  color: #ddd3e7 !important;
+  border-color: rgba(225, 200, 255, 0.12) !important;
+  background: rgba(5, 2, 10, 0.9) !important;
+}
+
 @media (forced-colors: active) {
   .traveling-spark,
   .ambient-bloom,
