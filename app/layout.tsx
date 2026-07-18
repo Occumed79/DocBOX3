@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import './styles/base.css';
+import './styles/shell.css';
+import './styles/library.css';
+import './styles/inspector.css';
+import './styles/overlays.css';
+import './styles/responsive.css';
 
 export const metadata: Metadata = {
   title: 'Source Vault',
