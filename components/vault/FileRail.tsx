@@ -1,6 +1,6 @@
 'use client';
 
-import type { VaultFile } from './FileCard';
+import type { VaultFile } from './file-model';
 
 export default function FileRail({ files, selectedFile, onSelect, loading }: {
   files: VaultFile[];

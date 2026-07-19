@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { VaultFile } from './FileCard';
+import type { VaultFile } from './file-model';
 
 const QUICK_SEARCHES = ['signed agreement', 'invoice package', 'training materials', 'employee forms'];
 
