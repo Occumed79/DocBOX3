@@ -10,6 +10,7 @@ import './styles/stage.css';
 import './styles/stage-polish.css';
 import './styles/stage-integration.css';
 import './styles/gallery.css';
+import './styles/abyssal-overlays.css';
 
 export const metadata: Metadata = {
   title: 'Source Vault',
