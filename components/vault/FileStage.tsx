@@ -2,12 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDropzone, type FileRejection } from 'react-dropzone';
-import type { VaultFile } from './FileCard';
-import { formatDate, formatSize } from './FileCard';
+import { formatDate, formatSize, type VaultFile } from './file-model';
 import FilePreviewModal from './FilePreviewModal';
 import { UploadIcon } from './icons';
-
-type StageFile = VaultFile & { extracted_text?: string | null };
 
 const ACCEPTED = {
   'application/pdf': ['.pdf'],
@@ -23,7 +20,7 @@ const ACCEPTED = {
 };
 
 interface Props {
-  file: StageFile | null;
+  file: VaultFile | null;
   folderId: string | null;
   folderName?: string | null;
   openRequest: number;
