@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import SearchBar from './SearchBar';
 import type { VaultFile } from './FileCard';
-import UploadSheet from './UploadSheet';
 import VaultInspector from './VaultInspector';
 import FileStage from './FileStage';
 import FileRail from './FileRail';
@@ -39,7 +38,8 @@ export default function VaultApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
+  const [stagingActive, setStagingActive] = useState(false);
+  const [uploadOpenRequest, setUploadOpenRequest] = useState(0);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [folderMutation, setFolderMutation] = useState(false);
@@ -80,17 +80,11 @@ export default function VaultApp() {
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
   useEffect(() => { if (!isSearching) void loadFiles(); }, [isSearching, loadFiles]);
-  useEffect(() => {
-    if (!showUpload) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [showUpload]);
 
   const displayFiles = isSearching ? searchResults : files;
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || stagingActive) return;
     if (!displayFiles.length) {
       setSelectedFile(null);
       return;
@@ -99,7 +93,7 @@ export default function VaultApp() {
       if (!current) return displayFiles[0];
       return displayFiles.find(file => file.id === current.id) || displayFiles[0];
     });
-  }, [displayFiles, loading]);
+  }, [displayFiles, loading, stagingActive]);
 
   const navigateTo = useCallback((view: NavView, folderId: string | null = null) => {
     setNavView(view);
@@ -108,6 +102,7 @@ export default function VaultApp() {
     setSearchQuery('');
     setSearchResults([]);
     setSelectedFile(null);
+    setStagingActive(false);
     setError(null);
   }, []);
 
@@ -116,6 +111,7 @@ export default function VaultApp() {
     setSearchQuery(query);
     setIsSearching(true);
     setSelectedFile(results[0] || null);
+    setStagingActive(false);
     setError(null);
   }, []);
 
@@ -132,7 +128,11 @@ export default function VaultApp() {
     setFolderMutation(true);
     setError(null);
     try {
-      const response = await fetch('/api/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      const response = await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
       if (!response.ok) throw new Error(await readError(response, 'Could not create the folder.'));
       setNewFolderName('');
       setShowNewFolder(false);
@@ -149,7 +149,11 @@ export default function VaultApp() {
     setFolderMutation(true);
     setError(null);
     try {
-      const response = await fetch('/api/folders', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: folder.id }) });
+      const response = await fetch('/api/folders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: folder.id }),
+      });
       if (!response.ok) throw new Error(await readError(response, 'Could not delete the folder.'));
       if (activeFolder === folder.id) navigateTo('all');
       await Promise.all([loadFolders(), loadFiles()]);
@@ -162,7 +166,7 @@ export default function VaultApp() {
 
   const openUpload = useCallback(() => {
     if (navView === 'archive') navigateTo('all');
-    setShowUpload(true);
+    setUploadOpenRequest(request => request + 1);
   }, [navView, navigateTo]);
 
   const handleUploaded = useCallback((uploaded: VaultFile) => {
@@ -170,7 +174,9 @@ export default function VaultApp() {
     setIsSearching(false);
     setSearchQuery('');
     setSearchResults([]);
-    setFiles(previous => (uploaded.folder_id || null) === activeFolder ? [uploaded, ...previous.filter(file => file.id !== uploaded.id)] : previous);
+    setFiles(previous => (uploaded.folder_id || null) === activeFolder
+      ? [uploaded, ...previous.filter(file => file.id !== uploaded.id)]
+      : previous);
     setSelectedFile(uploaded);
     void loadFolders();
   }, [activeFolder, loadFolders]);
@@ -193,59 +199,70 @@ export default function VaultApp() {
   const viewTitle = isSearching ? `Results for “${searchQuery}”` : activeFolderName || (navView === 'archive' ? 'Archive' : 'All Files');
 
   return (
-    <div className="cosmic-vault-shell">
+    <div className="cosmic-vault-shell integrated-stage-shell">
       <LuminousBackdrop />
 
       <div className="cosmic-vault-ui">
-        <header className="cosmic-command-bar">
-          <button type="button" className="cosmic-brand" onClick={() => navigateTo('all')} aria-label="Open All Files">
-            <span className="cosmic-brand-mark" aria-hidden="true"><span>SV</span></span>
-            <span><strong>Source Vault</strong><small>Luminous file workspace</small></span>
-          </button>
-          <div className="cosmic-search"><SearchBar onResults={handleSearchResults} onClear={handleSearchClear} onError={reportError} /></div>
-          <button type="button" className="cosmic-upload-button" onClick={openUpload}><UploadIcon /><span>Upload</span></button>
+        <header className="cosmic-command-stack">
+          <div className="cosmic-command-bar">
+            <button type="button" className="cosmic-brand" onClick={() => navigateTo('all')} aria-label="Open All Files">
+              <span className="cosmic-brand-mark" aria-hidden="true"><span>SV</span></span>
+              <span><strong>Source Vault</strong><small>Luminous file workspace</small></span>
+            </button>
+            <div className="cosmic-search"><SearchBar onResults={handleSearchResults} onClear={handleSearchClear} onError={reportError} /></div>
+            <button type="button" className="cosmic-upload-button" onClick={openUpload}><UploadIcon /><span>Add Files</span></button>
+          </div>
+
+          <div className="cosmic-folder-dock" aria-label="Vault locations">
+            <div className="cosmic-folder-scroll">
+              <button type="button" className={navView === 'all' && !isSearching && !activeFolder ? 'cosmic-location-pill active' : 'cosmic-location-pill'} onClick={() => navigateTo('all')}><FilesIcon /><span>All Files</span><small>{navView === 'all' && !activeFolder ? displayFiles.length : ''}</small></button>
+              <button type="button" className={navView === 'archive' && !isSearching ? 'cosmic-location-pill active' : 'cosmic-location-pill'} onClick={() => navigateTo('archive')}><ArchiveIcon /><span>Archive</span></button>
+
+              {rootFolders.map(folder => (
+                <div key={folder.id} className={activeFolder === folder.id && !isSearching ? 'cosmic-folder-pill active' : 'cosmic-folder-pill'}>
+                  <button type="button" onClick={() => navigateTo('all', folder.id)}><FolderIcon color="currentColor" /><span>{folder.name}</span><small>{folder.file_count}</small></button>
+                  <button type="button" className="cosmic-folder-delete" onClick={() => void deleteFolder(folder)} aria-label={`Delete ${folder.name}`}><CloseIcon /></button>
+                </div>
+              ))}
+            </div>
+
+            <div className="cosmic-folder-create">
+              {showNewFolder ? (
+                <div className="cosmic-folder-form">
+                  <input autoFocus value={newFolderName} onChange={event => setNewFolderName(event.target.value)} onKeyDown={event => {
+                    if (event.key === 'Enter') void createFolder();
+                    if (event.key === 'Escape') { setShowNewFolder(false); setNewFolderName(''); }
+                  }} placeholder="Folder name" disabled={folderMutation} />
+                  <button type="button" onClick={() => void createFolder()} disabled={folderMutation || !newFolderName.trim()}>Create</button>
+                  <button type="button" onClick={() => { setShowNewFolder(false); setNewFolderName(''); }} aria-label="Cancel"><CloseIcon /></button>
+                </div>
+              ) : (
+                <button type="button" className="cosmic-new-folder-button" onClick={() => setShowNewFolder(true)}><PlusIcon /><span>New Folder</span></button>
+              )}
+            </div>
+          </div>
         </header>
 
         {error && <div className="cosmic-status-banner" role="alert"><span>{error}</span><button type="button" onClick={() => setError(null)} aria-label="Dismiss error"><CloseIcon /></button></div>}
 
-        <main className={selectedFile ? 'cosmic-workspace has-inspector' : 'cosmic-workspace'}>
-          <aside className="cosmic-sidebar">
-            <div className="sidebar-heading"><span>Library</span><strong>{displayFiles.length}</strong></div>
-            <nav className="sidebar-nav" aria-label="Library navigation">
-              <button type="button" className={navView === 'all' && !isSearching && !activeFolder ? 'active' : ''} onClick={() => navigateTo('all')}><FilesIcon /><span>All Files</span></button>
-              <button type="button" className={navView === 'archive' && !isSearching ? 'active' : ''} onClick={() => navigateTo('archive')}><ArchiveIcon /><span>Archive</span></button>
-            </nav>
-
-            <div className="sidebar-folders">
-              <div className="sidebar-section-title"><span>Folders</span><button type="button" onClick={() => setShowNewFolder(true)} aria-label="Create folder"><PlusIcon /></button></div>
-              {showNewFolder && (
-                <div className="sidebar-folder-form">
-                  <input autoFocus value={newFolderName} onChange={event => setNewFolderName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void createFolder(); if (event.key === 'Escape') { setShowNewFolder(false); setNewFolderName(''); } }} placeholder="Folder name" disabled={folderMutation} />
-                  <button type="button" onClick={() => void createFolder()} disabled={folderMutation || !newFolderName.trim()}>Create</button>
-                </div>
-              )}
-              <div className="sidebar-folder-list">
-                {rootFolders.map(folder => (
-                  <div key={folder.id} className={activeFolder === folder.id && !isSearching ? 'sidebar-folder active' : 'sidebar-folder'}>
-                    <button type="button" onClick={() => navigateTo('all', folder.id)}><FolderIcon color="currentColor" /><span>{folder.name}</span><small>{folder.file_count}</small></button>
-                    <button type="button" className="sidebar-folder-delete" onClick={() => void deleteFolder(folder)} aria-label={`Delete ${folder.name}`}><CloseIcon /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
-
+        <main className={selectedFile && !stagingActive ? 'cosmic-workspace integrated-workspace has-inspector' : 'cosmic-workspace integrated-workspace'}>
           <section className="cosmic-stage-column" aria-labelledby="current-view-title">
             <div className="view-heading"><div><p>Current View</p><h2 id="current-view-title">{viewTitle}</h2></div><span>{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span></div>
-            <FileStage file={selectedFile} onUpload={openUpload} />
+            <FileStage
+              file={selectedFile}
+              folderId={activeFolder}
+              folderName={activeFolderName}
+              openRequest={uploadOpenRequest}
+              onUploaded={handleUploaded}
+              onError={reportError}
+              onStagingChange={setStagingActive}
+            />
             <FileRail files={displayFiles} selectedFile={selectedFile} onSelect={setSelectedFile} loading={loading} />
           </section>
 
-          {selectedFile && <VaultInspector file={selectedFile} onClose={() => setSelectedFile(null)} onUpdate={handleUpdate} onRemove={handleRemove} onError={reportError} />}
+          {selectedFile && !stagingActive && <VaultInspector file={selectedFile} onClose={() => setSelectedFile(null)} onUpdate={handleUpdate} onRemove={handleRemove} onError={reportError} />}
         </main>
       </div>
-
-      {showUpload && <UploadSheet folderId={activeFolder} folderName={activeFolderName} onUploaded={handleUploaded} onClose={() => setShowUpload(false)} onError={reportError} />}
     </div>
   );
 }
