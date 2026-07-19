@@ -11,11 +11,14 @@ import './styles/stage-polish.css';
 import './styles/stage-integration.css';
 import './styles/gallery.css';
 import './styles/abyssal-overlays.css';
+import './styles/landing.css';
+import './styles/docbox-polish.css';
 import './styles/glacial-palette.css';
+import './styles/landing-glacial.css';
 
 export const metadata: Metadata = {
-  title: 'Source Vault',
-  description: 'A luminous visual workspace for staging, previewing, organizing, and securely sharing documents.',
+  title: 'DocBox | Occu-Med',
+  description: 'Occu-Med DocBox — a luminous visual workspace for storing, previewing, organizing, and securely sharing documents.',
 };
 
 export const viewport: Viewport = {
