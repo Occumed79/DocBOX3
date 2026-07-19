@@ -1,0 +1,400 @@
+:root {
+  --glacial-025: #FCFCFF;
+  --glacial-050: #E3F6F9;
+  --glacial-200: #C8DFF7;
+  --glacial-300: #B3D0F0;
+  --glacial-600: #6B8EC5;
+  --glacial-900: #415881;
+
+  --abyssal-950: var(--glacial-900);
+  --abyssal-850: var(--glacial-900);
+  --abyssal-700: var(--glacial-600);
+  --abyssal-400: var(--glacial-300);
+  --abyssal-050: var(--glacial-050);
+
+  --page-bg: var(--glacial-900);
+  --page-bg-deep: var(--glacial-900);
+  --content-surface: rgba(65, 88, 129, 0.78);
+  --content-surface-hover: rgba(65, 88, 129, 0.92);
+  --glass-surface: rgba(65, 88, 129, 0.58);
+  --glass-surface-strong: rgba(65, 88, 129, 0.78);
+  --glass-border: rgba(200, 223, 247, 0.22);
+  --glass-highlight: rgba(252, 252, 255, 0.28);
+  --hairline: rgba(179, 208, 240, 0.14);
+  --hairline-strong: rgba(200, 223, 247, 0.28);
+  --text-primary: var(--glacial-025);
+  --text-secondary: var(--glacial-200);
+  --text-tertiary: rgba(200, 223, 247, 0.72);
+  --accent: var(--glacial-300);
+  --accent-strong: var(--glacial-600);
+  --accent-soft: rgba(107, 142, 197, 0.24);
+  --success: var(--glacial-300);
+}
+
+html,
+body {
+  background: var(--glacial-900) !important;
+}
+
+body {
+  color: var(--glacial-025);
+  background:
+    radial-gradient(circle at 50% -12%, rgba(227, 246, 249, 0.2), transparent 36%),
+    radial-gradient(circle at 8% 18%, rgba(179, 208, 240, 0.17), transparent 32%),
+    radial-gradient(circle at 90% 12%, rgba(107, 142, 197, 0.22), transparent 30%),
+    linear-gradient(180deg, var(--glacial-600) 0%, var(--glacial-900) 46%, var(--glacial-900) 100%) !important;
+}
+
+body::before {
+  background-image: radial-gradient(rgba(252, 252, 255, 0.15) 0.5px, transparent 0.5px);
+}
+
+body::after {
+  background:
+    conic-gradient(
+      from 190deg at 50% 26%,
+      transparent 0deg,
+      rgba(107, 142, 197, 0.2) 44deg,
+      transparent 102deg,
+      rgba(179, 208, 240, 0.12) 178deg,
+      transparent 252deg,
+      rgba(252, 252, 255, 0.055) 326deg,
+      transparent 360deg
+    );
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline-color: rgba(227, 246, 249, 0.96) !important;
+}
+
+.app-header::before {
+  background: linear-gradient(180deg, rgba(65, 88, 129, 0.98) 0%, rgba(65, 88, 129, 0.78) 66%, transparent 100%);
+}
+
+.control-glass {
+  border-color: rgba(200, 223, 247, 0.24);
+  border-top-color: rgba(252, 252, 255, 0.34);
+  background:
+    linear-gradient(180deg, rgba(252, 252, 255, 0.13), rgba(200, 223, 247, 0.045) 45%, rgba(65, 88, 129, 0.05)),
+    radial-gradient(circle at 18% 0%, rgba(227, 246, 249, 0.15), transparent 34%),
+    rgba(65, 88, 129, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.22),
+    inset 0 -1px 0 rgba(179, 208, 240, 0.05),
+    var(--shadow-soft);
+}
+
+.control-glass::after {
+  background: linear-gradient(110deg, transparent 32%, rgba(252, 252, 255, 0.1) 48%, transparent 64%);
+}
+
+.brand-mark,
+.cosmic-brand-mark {
+  border-color: rgba(200, 223, 247, 0.38) !important;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(252, 252, 255, 0.42), transparent 34%),
+    linear-gradient(145deg, rgba(179, 208, 240, 0.96), rgba(107, 142, 197, 0.92)) !important;
+  color: var(--glacial-900) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.34),
+    0 0 30px rgba(200, 223, 247, 0.24) !important;
+}
+
+.primary-action,
+.cosmic-upload-button,
+.gallery-upload-action,
+.toolbar-action.prominent {
+  color: var(--glacial-025) !important;
+  border-color: rgba(227, 246, 249, 0.44) !important;
+  background: linear-gradient(135deg, var(--glacial-600), var(--glacial-300)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.38),
+    0 14px 36px rgba(65, 88, 129, 0.42),
+    0 0 32px rgba(200, 223, 247, 0.18) !important;
+}
+
+.primary-action:hover:not(:disabled),
+.cosmic-upload-button:hover:not(:disabled),
+.gallery-upload-action:hover:not(:disabled),
+.toolbar-action.prominent:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.5),
+    0 18px 46px rgba(65, 88, 129, 0.5),
+    0 0 40px rgba(227, 246, 249, 0.24) !important;
+}
+
+.nav-control.active,
+.folder-group.active,
+.cosmic-location-pill.active,
+.cosmic-folder-pill.active > button:first-child {
+  color: var(--glacial-025) !important;
+  border-color: rgba(200, 223, 247, 0.4) !important;
+  background: linear-gradient(135deg, rgba(107, 142, 197, 0.78), rgba(179, 208, 240, 0.3)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.16),
+    0 0 28px rgba(200, 223, 247, 0.14) !important;
+}
+
+.search-control,
+.cosmic-search .search-control,
+.cosmic-folder-form input,
+.stage-notes-editor textarea,
+.stage-detail-list > div {
+  color: var(--glacial-025) !important;
+  border-color: rgba(200, 223, 247, 0.2) !important;
+  background: rgba(65, 88, 129, 0.8) !important;
+}
+
+.search-control:focus-within,
+.cosmic-search .search-control:focus-within {
+  border-color: rgba(200, 223, 247, 0.68) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.14),
+    0 0 0 4px rgba(179, 208, 240, 0.13),
+    0 0 32px rgba(227, 246, 249, 0.2) !important;
+}
+
+.search-icon,
+.search-control input::placeholder,
+.keyboard-hint,
+.brand-copy span,
+.cosmic-location-pill,
+.cosmic-folder-pill > button:first-child,
+.cosmic-new-folder-button,
+.gallery-main-column .view-heading p,
+.gallery-main-column .view-heading > span,
+.gallery-empty-state p,
+.file-preview-caption span,
+.gallery-document-sheet small,
+.preview-modal .modal-title-group p {
+  color: rgba(200, 223, 247, 0.78) !important;
+}
+
+.search-clear,
+.icon-action,
+.gallery-secondary-action,
+.file-preview-caption button,
+.cosmic-folder-form button {
+  color: var(--glacial-200) !important;
+  border-color: rgba(200, 223, 247, 0.2) !important;
+  background: rgba(200, 223, 247, 0.06) !important;
+}
+
+.search-clear:hover,
+.icon-action:hover,
+.gallery-secondary-action:hover:not(:disabled),
+.file-preview-caption button:hover:not(:disabled),
+.cosmic-folder-form button:hover:not(:disabled) {
+  color: var(--glacial-025) !important;
+  border-color: rgba(227, 246, 249, 0.42) !important;
+  background: rgba(107, 142, 197, 0.3) !important;
+}
+
+.search-suggestions button,
+.folder-pill,
+.nav-control {
+  color: var(--glacial-200) !important;
+}
+
+.search-suggestions button:hover,
+.folder-pill:hover,
+.nav-control:hover {
+  color: var(--glacial-025) !important;
+  border-color: rgba(200, 223, 247, 0.3) !important;
+  background: rgba(179, 208, 240, 0.1) !important;
+}
+
+.abyssal-vault-shell {
+  --ink: var(--glacial-025);
+  --muted: rgba(200, 223, 247, 0.72);
+  --muted-strong: var(--glacial-200);
+  --violet: var(--glacial-600);
+  --violet-bright: var(--glacial-300);
+  --violet-soft: var(--glacial-050);
+  --ice: var(--glacial-025);
+  --panel: rgba(65, 88, 129, 0.74);
+  --panel-strong: rgba(65, 88, 129, 0.92);
+  --hairline: rgba(200, 223, 247, 0.16);
+  --hairline-bright: rgba(252, 252, 255, 0.32);
+  background:
+    radial-gradient(circle at 16% 4%, rgba(227, 246, 249, 0.18), transparent 30%),
+    radial-gradient(circle at 86% 8%, rgba(179, 208, 240, 0.22), transparent 28%),
+    linear-gradient(180deg, var(--glacial-900) 0%, rgba(107, 142, 197, 0.68) 48%, var(--glacial-900) 100%) !important;
+}
+
+.abyssal-vault-shell .ambient-bloom-one {
+  background: rgba(107, 142, 197, 0.72) !important;
+}
+
+.abyssal-vault-shell .ambient-bloom-two {
+  background: rgba(200, 223, 247, 0.5) !important;
+}
+
+.abyssal-vault-shell .pixel-field {
+  background-image:
+    linear-gradient(rgba(252, 252, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(252, 252, 255, 0.16) 1px, transparent 1px) !important;
+}
+
+.abyssal-vault-shell .traveling-spark {
+  background: var(--glacial-025) !important;
+  box-shadow:
+    0 0 calc(var(--spark-size) * 2) rgba(252, 252, 255, 0.98),
+    0 0 calc(var(--spark-size) * 5) rgba(200, 223, 247, 0.92),
+    0 0 calc(var(--spark-size) * 10) rgba(107, 142, 197, 0.72) !important;
+}
+
+.abyssal-vault-shell .cosmic-command-bar,
+.abyssal-vault-shell .cosmic-folder-dock,
+.staged-gallery-section,
+.abyssal-vault-shell .stage-inspector {
+  border-color: rgba(200, 223, 247, 0.22) !important;
+  border-top-color: rgba(252, 252, 255, 0.34) !important;
+  background:
+    linear-gradient(180deg, rgba(252, 252, 255, 0.1), rgba(200, 223, 247, 0.025)),
+    rgba(65, 88, 129, 0.78) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.14),
+    0 22px 70px rgba(25, 37, 62, 0.4),
+    0 0 48px rgba(200, 223, 247, 0.1) !important;
+}
+
+.abyssal-vault-shell .cosmic-status-banner,
+.gallery-upload-errors,
+.staged-badge,
+.preview-open-label {
+  color: var(--glacial-025) !important;
+  border-color: rgba(200, 223, 247, 0.3) !important;
+  background: rgba(65, 88, 129, 0.86) !important;
+}
+
+.gallery-drop-overlay,
+.modal-backdrop,
+.abyssal-vault-shell .modal-backdrop {
+  background: rgba(65, 88, 129, 0.88) !important;
+}
+
+.gallery-main-column .view-heading h1,
+.gallery-section-heading h2,
+.file-preview-tile,
+.file-preview-caption strong,
+.gallery-empty-state h2,
+.gallery-document-sheet b,
+.preview-modal .modal-title-group h2,
+.preview-modal .full-text-preview {
+  color: var(--glacial-025) !important;
+}
+
+.vault-gallery-shell.drag-active::before {
+  border-color: rgba(227, 246, 249, 0.58) !important;
+  background: rgba(179, 208, 240, 0.14) !important;
+  box-shadow:
+    inset 0 0 80px rgba(200, 223, 247, 0.16),
+    0 0 64px rgba(227, 246, 249, 0.2) !important;
+}
+
+.file-preview-open,
+.pdf-surface,
+.gallery-preview-loading,
+.document-surface {
+  border-color: rgba(200, 223, 247, 0.2) !important;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(227, 246, 249, 0.2), transparent 44%),
+    linear-gradient(145deg, var(--glacial-600), var(--glacial-900)) !important;
+}
+
+.file-preview-open:hover,
+.file-preview-open:focus-visible {
+  border-color: rgba(227, 246, 249, 0.58) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.16),
+    0 30px 72px rgba(25, 37, 62, 0.42),
+    0 0 38px rgba(200, 223, 247, 0.2) !important;
+}
+
+.text-surface {
+  background: linear-gradient(145deg, var(--glacial-600), var(--glacial-900)) !important;
+}
+
+.gallery-paper {
+  color: var(--glacial-900) !important;
+  background: var(--glacial-025) !important;
+}
+
+.gallery-document-sheet {
+  border-color: rgba(252, 252, 255, 0.36) !important;
+  background: linear-gradient(155deg, rgba(252, 252, 255, 0.2), rgba(179, 208, 240, 0.11)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.24),
+    0 0 48px rgba(200, 223, 247, 0.22) !important;
+}
+
+.gallery-document-sheet i {
+  background: rgba(252, 252, 255, 0.22) !important;
+}
+
+.gallery-empty-stack span {
+  border-color: rgba(200, 223, 247, 0.32) !important;
+  background: linear-gradient(145deg, rgba(200, 223, 247, 0.2), rgba(107, 142, 197, 0.14)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.14),
+    0 0 42px rgba(200, 223, 247, 0.16) !important;
+}
+
+.gallery-skeleton {
+  border-color: rgba(200, 223, 247, 0.14) !important;
+  background: linear-gradient(100deg, rgba(65, 88, 129, 0.66), rgba(200, 223, 247, 0.2), rgba(65, 88, 129, 0.66)) !important;
+  background-size: 220% 100% !important;
+}
+
+.stage-tag-list span,
+.type-badge,
+.preview-modal .type-badge {
+  color: var(--glacial-050) !important;
+  border-color: rgba(200, 223, 247, 0.34) !important;
+  background: rgba(107, 142, 197, 0.34) !important;
+}
+
+.preview-modal,
+.abyssal-vault-shell .preview-modal {
+  border-color: rgba(200, 223, 247, 0.28) !important;
+  background: linear-gradient(180deg, rgba(107, 142, 197, 0.98), rgba(65, 88, 129, 0.99)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 252, 255, 0.16),
+    0 35px 120px rgba(25, 37, 62, 0.62),
+    0 0 76px rgba(200, 223, 247, 0.18) !important;
+}
+
+.preview-modal .modal-header {
+  border-bottom-color: rgba(200, 223, 247, 0.18) !important;
+}
+
+.preview-modal .modal-preview-body,
+.abyssal-vault-shell .modal-preview-body {
+  background: var(--glacial-900) !important;
+}
+
+.preview-modal .full-text-preview {
+  border-color: rgba(200, 223, 247, 0.18) !important;
+  background: rgba(65, 88, 129, 0.94) !important;
+}
+
+.spinner,
+.preview-modal .spinner,
+.abyssal-vault-shell .spinner {
+  border-color: rgba(200, 223, 247, 0.26) !important;
+  border-top-color: var(--glacial-025) !important;
+}
+
+.abyssal-vault-shell .wave-loop-front {
+  filter: drop-shadow(0 0 22px rgba(200, 223, 247, 0.38)) !important;
+}
+
+.abyssal-vault-shell .wave-loop-back {
+  filter: blur(12px) drop-shadow(0 0 26px rgba(107, 142, 197, 0.3)) !important;
+}
