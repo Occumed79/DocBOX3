@@ -1,0 +1,13 @@
+:root {
+  --landing-bg: #415881;
+  --landing-light-rgb: 252, 252, 255;
+  --landing-accent-rgb: 200, 223, 247;
+  --landing-mid-rgb: 179, 208, 240;
+  --landing-deep-rgb: 107, 142, 197;
+}
+
+.docbox-landing::after {
+  background:
+    radial-gradient(circle at 50% 45%, transparent 32%, rgba(65, 88, 129, 0.03) 62%, rgba(30, 44, 72, 0.28) 100%),
+    linear-gradient(180deg, rgba(252, 252, 255, 0.025), transparent 24%, transparent 78%, rgba(23, 34, 56, 0.14));
+}
