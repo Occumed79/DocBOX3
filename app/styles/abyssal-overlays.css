@@ -1,3 +1,11 @@
+.abyssal-vault-shell .wave-loop-front {
+  filter: drop-shadow(0 0 20px rgba(58, 141, 154, 0.34)) !important;
+}
+
+.abyssal-vault-shell .wave-loop-back {
+  filter: blur(12px) drop-shadow(0 0 24px rgba(15, 76, 92, 0.24)) !important;
+}
+
 .modal-backdrop {
   background: rgba(2, 12, 20, 0.8) !important;
   backdrop-filter: blur(22px) saturate(120%) !important;
