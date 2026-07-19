@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useEffect, type CSSProperties, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const LANDING_ART = '/docbox-landing.png?v=20260719-sync';
+const LANDING_ART = '/docbox-landing.png';
 
 type ParticleKind = 'dust' | 'firefly' | 'bloom';
 
