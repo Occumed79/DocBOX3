@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDropzone, type FileRejection } from 'react-dropzone';
 import type { VaultFile } from './FileCard';
 import { formatDate, formatSize } from './FileCard';
@@ -68,6 +68,7 @@ export default function FileStage({ file, folderId, folderName, openRequest, onU
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [localText, setLocalText] = useState('');
   const [localPreviewError, setLocalPreviewError] = useState<string | null>(null);
+  const handledOpenRequest = useRef(openRequest);
 
   const activeQueuedFile = queued[activeQueuedIndex] || null;
   const stagingActive = queued.length > 0;
@@ -75,12 +76,11 @@ export default function FileStage({ file, folderId, folderName, openRequest, onU
   const stageFiles = useCallback((acceptedFiles: File[]) => {
     if (!acceptedFiles.length) return;
     setUploadErrors([]);
+    setActiveQueuedIndex(0);
     setQueued(previous => {
       const existing = new Set(previous.map(item => `${item.name}-${item.size}-${item.lastModified}`));
       const additions = acceptedFiles.filter(item => !existing.has(`${item.name}-${item.size}-${item.lastModified}`));
-      const next = [...previous, ...additions];
-      if (!previous.length && next.length) setActiveQueuedIndex(0);
-      return next;
+      return [...previous, ...additions];
     });
   }, []);
 
@@ -100,7 +100,9 @@ export default function FileStage({ file, folderId, folderName, openRequest, onU
   });
 
   useEffect(() => {
-    if (openRequest > 0) open();
+    if (openRequest <= handledOpenRequest.current) return;
+    handledOpenRequest.current = openRequest;
+    open();
   }, [open, openRequest]);
 
   useEffect(() => {
@@ -327,7 +329,7 @@ function LocalFilePreview({ file, url, text, error }: { file: File; url: string 
   if (error) return <div className="stage-unavailable"><strong>Preview unavailable</strong><span>{error}</span></div>;
 
   if (isImageFile(file)) {
-    return url ? <div className="stage-local-image"><img src={url} alt={file.name} /></div> : <div className="stage-loading"><span className="spinner" /><span>Preparing image…</span></div>;
+    return url ? <div className="stage-local-image">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={url} alt={file.name} /></div> : <div className="stage-loading"><span className="spinner" /><span>Preparing image…</span></div>;
   }
 
   if (isPdfFile(file)) {
@@ -352,7 +354,7 @@ function LocalThumb({ file }: { file: File }) {
     return () => URL.revokeObjectURL(objectUrl);
   }, [file, image]);
 
-  if (url) return <span className="stage-queue-thumb image"><img src={url} alt="" /></span>;
+  if (url) return <span className="stage-queue-thumb image">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={url} alt="" /></span>;
   return <span className="stage-queue-thumb">{extension(file.name).toUpperCase()}</span>;
 }
 
