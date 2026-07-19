@@ -89,7 +89,6 @@ export default function VaultApp() {
     setSearchQuery('');
     setSearchResults([]);
     setSelectedFile(null);
-    setStagingActive(false);
     setError(null);
   }, []);
 
@@ -183,7 +182,6 @@ export default function VaultApp() {
   const rootFolders = useMemo(() => folders.filter(folder => !folder.parent_id), [folders]);
   const activeFolderName = activeFolder ? folders.find(folder => folder.id === activeFolder)?.name : null;
   const viewTitle = isSearching ? `Results for “${searchQuery}”` : activeFolderName || (navView === 'archive' ? 'Archive' : 'All Files');
-  const galleryKey = `${navView}:${activeFolder || 'root'}:${isSearching ? searchQuery : ''}`;
 
   return (
     <div className="cosmic-vault-shell abyssal-vault-shell">
@@ -236,7 +234,6 @@ export default function VaultApp() {
           <section className="gallery-main-column" aria-labelledby="current-view-title">
             <div className="view-heading"><div><p>Current View</p><h1 id="current-view-title">{viewTitle}</h1></div><span>{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span></div>
             <FileGallery
-              key={galleryKey}
               files={displayFiles}
               loading={loading}
               folderId={activeFolder}
