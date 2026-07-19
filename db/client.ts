@@ -2,6 +2,15 @@ import { Pool, type PoolConfig, type QueryResultRow } from 'pg';
 
 const pools = new Map<string, Pool>();
 
+function normalizeNeonHostname(hostname: string) {
+  if (!hostname.endsWith('.neon.tech')) return hostname;
+
+  // Render's saved DATABASE_URL currently contains `us-east1` instead of
+  // Neon's valid `us-east-1`. Normalize any similar missing hyphen before
+  // the region number without changing already-valid hostnames.
+  return hostname.replace(/\.([a-z]{2})-([a-z]+)(\d)\./, '.$1-$2-$3.');
+}
+
 function databaseCandidates() {
   const raw = process.env.DATABASE_URL?.trim();
   if (!raw) throw new Error('DATABASE_URL is not set.');
@@ -13,8 +22,10 @@ function databaseCandidates() {
     throw new Error('DATABASE_URL is not a valid PostgreSQL connection string.');
   }
 
+  parsed.hostname = normalizeNeonHostname(parsed.hostname);
+
   // node-postgres handles TLS itself. Removing these URL flags avoids
-  // channel-binding/fetch compatibility issues seen on Render.
+  // channel-binding compatibility issues seen on Render.
   parsed.searchParams.delete('channel_binding');
   parsed.searchParams.delete('sslmode');
 
