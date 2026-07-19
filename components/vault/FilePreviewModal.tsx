@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { VaultFile } from './FileCard';
-import { formatDate, formatSize, typeClass } from './FileCard';
+import { formatDate, formatSize, typeClass, type VaultFile } from './file-model';
 
 interface Props {
   file: VaultFile;
