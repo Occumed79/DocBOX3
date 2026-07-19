@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { uploadToStorage, type StorageResult } from './storage';
 
 export type UploadProvider = 'source-vault' | 'filestack';
@@ -37,7 +37,7 @@ export async function uploadFileThroughFacilitator({
 async function uploadWithFilestack(
   buffer: Buffer,
   originalName: string,
-  mimeType: string
+  mimeType: string,
 ): Promise<FacilitatedUploadResult> {
   const apiKey = process.env.FILESTACK_API_KEY;
   if (!apiKey) {
@@ -45,7 +45,7 @@ async function uploadWithFilestack(
   }
 
   const storeProvider = process.env.FILESTACK_STORE_PROVIDER || 'S3';
-  const filename = originalName || `source-vault-${uuidv4()}`;
+  const filename = originalName || `source-vault-${randomUUID()}`;
   const safePrefix = (process.env.FILESTACK_PATH_PREFIX || 'source-vault')
     .replace(/^\/+|\/+$/g, '')
     .trim();
@@ -57,7 +57,7 @@ async function uploadWithFilestack(
   });
 
   if (safePrefix) {
-    params.set('path', `${safePrefix}/${uuidv4()}-${filename}`);
+    params.set('path', `${safePrefix}/${randomUUID()}-${filename}`);
   }
 
   const endpoint = `https://www.filestackapi.com/api/store/${encodeURIComponent(storeProvider)}?${params.toString()}`;
