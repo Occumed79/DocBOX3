@@ -9,17 +9,18 @@ import './styles/responsive.css';
 import './styles/stage.css';
 import './styles/stage-polish.css';
 import './styles/stage-integration.css';
+import './styles/gallery.css';
 
 export const metadata: Metadata = {
   title: 'Source Vault',
-  description: 'A luminous file workspace for staging, previewing, organizing, and securely sharing documents.',
+  description: 'A luminous visual workspace for staging, previewing, organizing, and securely sharing documents.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#07030d',
+  themeColor: '#061827',
   colorScheme: 'dark',
 };
 
