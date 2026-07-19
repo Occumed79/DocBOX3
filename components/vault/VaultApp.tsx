@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import SearchBar from './SearchBar';
-import type { VaultFile } from './FileCard';
+import type { VaultFile } from './file-model';
 import VaultInspector from './VaultInspector';
 import FileStage from './FileStage';
 import FileRail from './FileRail';
