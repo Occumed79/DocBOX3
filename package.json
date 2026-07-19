@@ -12,31 +12,17 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
-    "@aws-sdk/s3-request-presigner": "^3.600.0",
-    "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
-    "formidable": "^3.5.1",
     "next": "^15.5.19",
-    "openai": "^4.47.1",
     "pg": "^8.16.3",
     "react": "^18",
     "react-dom": "^18",
-    "react-dropzone": "^14.2.3",
-    "uuid": "^11.1.1"
+    "react-dropzone": "^14.2.3"
   },
   "devDependencies": {
-    "@types/formidable": "^3",
     "@types/node": "^20",
     "@types/pg": "^8.15.5",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/uuid": "^9",
-    "autoprefixer": "^10.0.1",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^3.4.1",
     "typescript": "^5"
-  },
-  "overrides": {
-    "postcss": "^8.5.15"
   }
 }
