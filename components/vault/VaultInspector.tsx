@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { type VaultFile, formatDate, formatSize } from './FileCard';
+import { type VaultFile, formatDate, formatSize } from './file-model';
 import { CloseIcon } from './icons';
 
 async function readError(response: Response, fallback: string) {
