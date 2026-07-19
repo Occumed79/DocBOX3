@@ -2,12 +2,25 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
+function normalizeNeonHostname(hostname) {
+  if (!hostname.endsWith('.neon.tech')) return hostname;
+  return hostname.replace(/\.([a-z]{2})-([a-z]+)(\d)\./, '.$1-$2-$3.');
+}
+
 function normalizedDatabaseUrl() {
   const raw = process.env.DATABASE_URL?.trim();
   if (!raw) throw new Error('DATABASE_URL is not set.');
+
   const parsed = new URL(raw);
+  const originalHostname = parsed.hostname;
+  parsed.hostname = normalizeNeonHostname(parsed.hostname);
   parsed.searchParams.delete('channel_binding');
   parsed.searchParams.delete('sslmode');
+
+  if (parsed.hostname !== originalHostname) {
+    console.log(`Corrected malformed Neon hostname: ${originalHostname} -> ${parsed.hostname}`);
+  }
+
   return parsed.toString();
 }
 
