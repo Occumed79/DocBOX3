@@ -1,0 +1,62 @@
+.abyssal-vault-shell .wave-loop-front {
+  filter: drop-shadow(0 0 20px rgba(58, 141, 154, 0.34)) !important;
+}
+
+.abyssal-vault-shell .wave-loop-back {
+  filter: blur(12px) drop-shadow(0 0 24px rgba(15, 76, 92, 0.24)) !important;
+}
+
+.modal-backdrop {
+  background: rgba(2, 12, 20, 0.8) !important;
+  backdrop-filter: blur(22px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(120%) !important;
+}
+
+.preview-modal {
+  border: 1px solid rgba(215, 242, 240, 0.2) !important;
+  background: linear-gradient(180deg, rgba(11, 45, 61, 0.97), rgba(4, 18, 29, 0.99)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(215, 242, 240, 0.12),
+    0 35px 120px rgba(0, 0, 0, 0.6),
+    0 0 70px rgba(58, 141, 154, 0.13) !important;
+}
+
+.preview-modal .modal-header {
+  border-bottom-color: rgba(215, 242, 240, 0.12) !important;
+}
+
+.preview-modal .modal-title-group h2 {
+  color: #D7F2F0 !important;
+}
+
+.preview-modal .modal-title-group p {
+  color: #7fa9ad !important;
+}
+
+.preview-modal .modal-preview-body {
+  background: #020b12 !important;
+}
+
+.preview-modal .type-badge,
+.preview-modal .toolbar-action.prominent {
+  color: #D7F2F0 !important;
+  border-color: rgba(58, 141, 154, 0.34) !important;
+  background: rgba(15, 76, 92, 0.5) !important;
+}
+
+.preview-modal .icon-action {
+  color: #a8c9ca !important;
+  border-color: rgba(215, 242, 240, 0.14) !important;
+  background: rgba(215, 242, 240, 0.04) !important;
+}
+
+.preview-modal .spinner {
+  border-color: rgba(215, 242, 240, 0.2) !important;
+  border-top-color: #D7F2F0 !important;
+}
+
+.preview-modal .full-text-preview {
+  color: #D7F2F0 !important;
+  border-color: rgba(215, 242, 240, 0.12) !important;
+  background: #04121d !important;
+}

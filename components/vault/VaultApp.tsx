@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import SearchBar from './SearchBar';
 import type { VaultFile } from './file-model';
 import VaultInspector from './VaultInspector';
-import FileStage from './FileStage';
-import FileRail from './FileRail';
+import FileGallery from './FileGallery';
 import LuminousBackdrop from './LuminousBackdrop';
 import { ArchiveIcon, CloseIcon, FilesIcon, FolderIcon, PlusIcon, UploadIcon } from './icons';
 
@@ -83,18 +82,6 @@ export default function VaultApp() {
 
   const displayFiles = isSearching ? searchResults : files;
 
-  useEffect(() => {
-    if (loading || stagingActive) return;
-    if (!displayFiles.length) {
-      setSelectedFile(null);
-      return;
-    }
-    setSelectedFile(current => {
-      if (!current) return displayFiles[0];
-      return displayFiles.find(file => file.id === current.id) || displayFiles[0];
-    });
-  }, [displayFiles, loading, stagingActive]);
-
   const navigateTo = useCallback((view: NavView, folderId: string | null = null) => {
     setNavView(view);
     setActiveFolder(view === 'archive' ? null : folderId);
@@ -102,7 +89,6 @@ export default function VaultApp() {
     setSearchQuery('');
     setSearchResults([]);
     setSelectedFile(null);
-    setStagingActive(false);
     setError(null);
   }, []);
 
@@ -110,8 +96,7 @@ export default function VaultApp() {
     setSearchResults(results);
     setSearchQuery(query);
     setIsSearching(true);
-    setSelectedFile(results[0] || null);
-    setStagingActive(false);
+    setSelectedFile(null);
     setError(null);
   }, []);
 
@@ -177,7 +162,7 @@ export default function VaultApp() {
     setFiles(previous => (uploaded.folder_id || null) === activeFolder
       ? [uploaded, ...previous.filter(file => file.id !== uploaded.id)]
       : previous);
-    setSelectedFile(uploaded);
+    setSelectedFile(null);
     void loadFolders();
   }, [activeFolder, loadFolders]);
 
@@ -199,7 +184,7 @@ export default function VaultApp() {
   const viewTitle = isSearching ? `Results for “${searchQuery}”` : activeFolderName || (navView === 'archive' ? 'Archive' : 'All Files');
 
   return (
-    <div className="cosmic-vault-shell integrated-stage-shell">
+    <div className="cosmic-vault-shell abyssal-vault-shell">
       <LuminousBackdrop />
 
       <div className="cosmic-vault-ui">
@@ -207,7 +192,7 @@ export default function VaultApp() {
           <div className="cosmic-command-bar">
             <button type="button" className="cosmic-brand" onClick={() => navigateTo('all')} aria-label="Open All Files">
               <span className="cosmic-brand-mark" aria-hidden="true"><span>SV</span></span>
-              <span><strong>Source Vault</strong><small>Luminous file workspace</small></span>
+              <span><strong>Source Vault</strong><small>Visual file workspace</small></span>
             </button>
             <div className="cosmic-search"><SearchBar onResults={handleSearchResults} onClear={handleSearchClear} onError={reportError} /></div>
             <button type="button" className="cosmic-upload-button" onClick={openUpload}><UploadIcon /><span>Add Files</span></button>
@@ -245,19 +230,20 @@ export default function VaultApp() {
 
         {error && <div className="cosmic-status-banner" role="alert"><span>{error}</span><button type="button" onClick={() => setError(null)} aria-label="Dismiss error"><CloseIcon /></button></div>}
 
-        <main className={selectedFile && !stagingActive ? 'cosmic-workspace integrated-workspace has-inspector' : 'cosmic-workspace integrated-workspace'}>
-          <section className="cosmic-stage-column" aria-labelledby="current-view-title">
-            <div className="view-heading"><div><p>Current View</p><h2 id="current-view-title">{viewTitle}</h2></div><span>{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span></div>
-            <FileStage
-              file={selectedFile}
+        <main className={selectedFile && !stagingActive ? 'gallery-workspace has-inspector' : 'gallery-workspace'}>
+          <section className="gallery-main-column" aria-labelledby="current-view-title">
+            <div className="view-heading"><div><p>Current View</p><h1 id="current-view-title">{viewTitle}</h1></div><span>{displayFiles.length} {displayFiles.length === 1 ? 'file' : 'files'}</span></div>
+            <FileGallery
+              files={displayFiles}
+              loading={loading}
               folderId={activeFolder}
               folderName={activeFolderName}
               openRequest={uploadOpenRequest}
               onUploaded={handleUploaded}
+              onDetails={setSelectedFile}
               onError={reportError}
               onStagingChange={setStagingActive}
             />
-            <FileRail files={displayFiles} selectedFile={selectedFile} onSelect={setSelectedFile} loading={loading} />
           </section>
 
           {selectedFile && !stagingActive && <VaultInspector file={selectedFile} onClose={() => setSelectedFile(null)} onUpdate={handleUpdate} onRemove={handleRemove} onError={reportError} />}

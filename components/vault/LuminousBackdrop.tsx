@@ -48,17 +48,17 @@ function WaveSvg({ id }: { id: string }) {
     <svg className="wave-svg" viewBox="0 0 1600 900" preserveAspectRatio="none">
       <defs>
         <linearGradient id={`ribbon-${id}`} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0" stopColor="#6f4dff" stopOpacity="0" />
-          <stop offset="0.22" stopColor="#9f73ff" stopOpacity="0.48" />
-          <stop offset="0.52" stopColor="#f04dff" stopOpacity="0.82" />
-          <stop offset="0.78" stopColor="#8f5dff" stopOpacity="0.54" />
-          <stop offset="1" stopColor="#5635dc" stopOpacity="0" />
+          <stop offset="0" stopColor="#061827" stopOpacity="0" />
+          <stop offset="0.22" stopColor="#0F4C5C" stopOpacity="0.48" />
+          <stop offset="0.52" stopColor="#3A8D9A" stopOpacity="0.82" />
+          <stop offset="0.78" stopColor="#0B2D3D" stopOpacity="0.6" />
+          <stop offset="1" stopColor="#061827" stopOpacity="0" />
         </linearGradient>
         <linearGradient id={`thread-${id}`} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0" stopColor="#d9d2ff" stopOpacity="0" />
-          <stop offset="0.34" stopColor="#f9efff" stopOpacity="0.94" />
-          <stop offset="0.62" stopColor="#ff7cf6" stopOpacity="0.9" />
-          <stop offset="1" stopColor="#8a73ff" stopOpacity="0" />
+          <stop offset="0" stopColor="#D7F2F0" stopOpacity="0" />
+          <stop offset="0.34" stopColor="#D7F2F0" stopOpacity="0.96" />
+          <stop offset="0.62" stopColor="#3A8D9A" stopOpacity="0.92" />
+          <stop offset="1" stopColor="#0F4C5C" stopOpacity="0" />
         </linearGradient>
         <filter id={`glow-${id}`} x="-30%" y="-80%" width="160%" height="260%">
           <feGaussianBlur stdDeviation="16" result="blur" />
