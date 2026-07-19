@@ -209,7 +209,7 @@ export default function FileGallery({
         </section>
       )}
 
-      <section className="stored-gallery-section" aria-labelledby="stored-gallery-title">
+      <section className="stored-gallery-section" aria-label="Stored files">
         {loading ? (
           <div className="file-preview-grid gallery-loading-grid" aria-label="Loading files">
             {Array.from({ length: 6 }).map((_, index) => <span key={index} className="gallery-skeleton" />)}
@@ -228,7 +228,7 @@ export default function FileGallery({
         ) : queued.length === 0 ? (
           <div className="gallery-empty-state">
             <div className="gallery-empty-stack" aria-hidden="true"><span /><span /><span /></div>
-            <h2 id="stored-gallery-title">Your vault is empty</h2>
+            <h2>Your vault is empty</h2>
             <p>Drop files anywhere in this area or use the single Add Files control above.</p>
           </div>
         ) : null}
@@ -291,12 +291,26 @@ function StoredPreviewTile({ file, onOpen, onDetails }: {
     return () => controller.abort();
   }, [file.id, previewError, previewUrl, visible]);
 
+  const openTile = () => onOpen(previewUrl);
+
   return (
     <article ref={tileRef} className="file-preview-tile">
-      <button type="button" className="file-preview-open" onClick={() => onOpen(previewUrl)} aria-label={`Preview ${file.name}`}>
+      <div
+        className="file-preview-open"
+        role="button"
+        tabIndex={0}
+        onClick={openTile}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openTile();
+          }
+        }}
+        aria-label={`Preview ${file.name}`}
+      >
         <StoredPreviewContent file={file} type={type} url={previewUrl} error={previewError} />
         <span className="preview-open-label">Open preview</span>
-      </button>
+      </div>
       <footer className="file-preview-caption">
         <div><strong title={file.name}>{file.name}</strong><span>{type.toUpperCase()} · {formatSize(file.size_bytes)} · {formatDate(file.upload_date)}</span></div>
         <button type="button" onClick={onDetails} aria-label={`Show details for ${file.name}`}>Details</button>
@@ -311,7 +325,7 @@ function StoredPreviewContent({ file, type, url, error }: { file: VaultFile; typ
   }
 
   if (type === 'pdf' && url) {
-    return <span className="gallery-preview-surface pdf-surface"><iframe src={`${url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&page=1`} title="" tabIndex={-1} /></span>;
+    return <span className="gallery-preview-surface pdf-surface"><iframe src={`${url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&page=1`} title={`First page of ${file.name}`} tabIndex={-1} /></span>;
   }
 
   if ((isTextType(type) || file.extracted_text) && (file.extracted_text || '').trim()) {
@@ -353,7 +367,7 @@ function LocalPreviewTile({ file, disabled, onRemove }: { file: File; disabled: 
         {isImageFile(file) && url ? (
           <span className="gallery-preview-surface image-surface">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={url} alt="" /></span>
         ) : isPdfFile(file) && url ? (
-          <span className="gallery-preview-surface pdf-surface"><iframe src={`${url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&page=1`} title="" tabIndex={-1} /></span>
+          <span className="gallery-preview-surface pdf-surface"><iframe src={`${url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&page=1`} title={`First page of ${file.name}`} tabIndex={-1} /></span>
         ) : isTextFile(file) && text ? (
           <span className="gallery-preview-surface text-surface"><span className="gallery-paper"><pre>{text}</pre></span></span>
         ) : (
