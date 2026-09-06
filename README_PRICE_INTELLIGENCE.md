@@ -40,7 +40,9 @@ Sources remain analytically separate. The headline benchmark is the median of ea
 
 For local searches, the requested city/ZIP is geocoded with MapTiler and geographic filtering is enforced. A local query is not silently converted into a state or national estimate if the requested market cannot be verified.
 
-## Live sources
+AI evidence ranking happens only **after** strict self-pay filtering and **after** benchmark arithmetic. Cohere and Cerebras can rank or explain evidence quality; they cannot create, alter, normalize, estimate, or correct a price and cannot change the benchmark.
+
+## Live / connected cash sources
 
 ### MedRates.fyi
 Only explicit cash/self-pay/discounted-cash fields are accepted.
@@ -50,6 +52,12 @@ Only explicit cash/self-pay/discounted-cash values are accepted.
 
 ### FairVisitHealth
 Uses the public hospital discounted-cash API for local medical pricing. The separate Medicare field is ignored. State/national fallbacks do not participate in a local headline benchmark. The API's list of cheapest nearby facilities is used for map evidence, not to calculate its median; the source-reported local cash distribution supplies the source median.
+
+### Loa
+Only source-labeled cash, discounted-cash, or explicit self-pay rows are accepted. Entity resolution is constrained to the exact city/state market and negotiated or generic MRF rows without a cash label are rejected.
+
+### OpenDoc
+Removed from the application. Its current provenance/inventory semantics are not strong enough for this benchmark, so it contributes no data and has no adapter in the repo.
 
 ## Licensed / permitted feeds
 
@@ -63,6 +71,38 @@ Only raw provider-published cash / Discounted Cash Price fields are accepted. Th
 
 ### FAIR Health
 Only a specifically licensed field/feed explicitly identified as cash/self-pay may be used. Claims-derived charge/allowed benchmarks and public out-of-network full-charge estimates are excluded.
+
+## Advisory evidence ranking
+
+### Cohere
+Cohere is the primary semantic reranker for local source evidence. Ranking documents contain evidence-quality metadata such as source identity, record count, geographic completeness, provider attribution, freshness, and payment-basis labels. Numeric prices are intentionally omitted from the ranking prompt.
+
+Default model: `rerank-v4.0-fast`.
+
+Key failover order:
+- `COHERE_API_KEY`
+- `COHERE_API_KEY_2`
+- `COHERE_API_KEY_3`
+- `COHERE_API_KEY_4`
+
+### Cerebras
+Cerebras is an optional secondary reviewer/tie-breaker for evidence quality. It receives evidence-quality facts, not price values, and returns source ordering/reasons only.
+
+Default model: `gpt-oss-120b`.
+
+Key failover order:
+- `CEREBRAS_API_KEY`
+- `CEREBRAS_API_KEY_2`
+
+### Ranking weights
+When both are available, final evidence ordering is weighted:
+- 55% deterministic evidence quality
+- 35% Cohere relevance
+- 10% Cerebras review order
+
+If either external service fails, weights fall back safely. If both fail, ranking is fully deterministic. Pricing search still succeeds.
+
+The independent national Price Map bypasses external AI ranking so procedure changes remain fast and do not generate unnecessary model calls.
 
 ## Render variables
 
@@ -86,6 +126,14 @@ Only a specifically licensed field/feed explicitly identified as cash/self-pay m
 - `FAIR_HEALTH_CASH_FEED_TOKEN`
 - `FAIR_HEALTH_CASH_FEED_TOKEN_HEADER`
 - `FAIR_HEALTH_CASH_FEED_METHOD`
+
+### Ranking
+- `CEREBRAS_API_KEY`
+- `CEREBRAS_API_KEY_2`
+- `COHERE_API_KEY`
+- `COHERE_API_KEY_2`
+- `COHERE_API_KEY_3`
+- `COHERE_API_KEY_4`
 
 Feed URL templates can use `{code}`, `{procedure}`, `{location}`, `{lat}`, `{lon}`, and `{radius}` placeholders.
 
