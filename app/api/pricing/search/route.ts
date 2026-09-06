@@ -72,13 +72,12 @@ export async function GET(request: NextRequest) {
   const allEligibleObservations = sourceResults.flatMap((source) => source.observations);
   const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
 
-  // A source with thousands of rows should not silently overpower a smaller source.
-  // The source-balanced benchmark gives every live source one vote by taking the
-  // median of each source's median. Raw pooled distribution remains available separately.
+  // Keep sources analytically separate. A source with many more rows should not
+  // dominate the headline benchmark simply because it contributes more records.
   const sourceMedians = sourceResults
     .map((source) => source.summary.median)
     .filter((value): value is number => value !== null && Number.isFinite(value));
-  const sourceBalanced = summarizePrices(sourceMedians);
+  const sourceBalancedMedian = summarizePrices(sourceMedians).median;
 
   return NextResponse.json({
     procedure,
@@ -86,13 +85,17 @@ export async function GET(request: NextRequest) {
     policy: {
       includedPaymentBases: ['cash', 'self_pay', 'discounted_cash', 'uninsured', 'direct_pay', 'marketplace_cash'],
       excluded: ['Medicare', 'Medicaid', 'commercial negotiated', 'insurance allowed', 'claims average', 'gross charge', 'chargemaster', 'unknown'],
-      combinationMethod: 'Source medians are kept separate. The headline benchmark is the median of live source medians; pooled observations are reported independently.',
+      combinationMethod: 'Sources remain separate. Headline median is the median of live source medians; low/high and count reflect the pooled eligible observations.',
     },
     sources: sourceResults,
-    combined: pooled,
+    combined: {
+      ...pooled,
+      median: sourceBalancedMedian,
+    },
+    pooled,
     benchmark: {
       sourceCount: sourceMedians.length,
-      median: sourceBalanced.median,
+      median: sourceBalancedMedian,
     },
   });
 }
