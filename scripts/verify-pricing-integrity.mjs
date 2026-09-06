@@ -40,7 +40,9 @@ assert.match(route, /provenanceFamilyCount/, 'API must expose provenance-family 
 assert.match(route, /dedupeObservations\(/, 'pooled observations must be deduplicated');
 assert.match(route, /National map search bypasses external AI ranking/, 'national map must bypass external AI');
 assert.match(route, /Presentation-only geocoding is deliberately after benchmark calculation/, 'map geocoding must happen after benchmark calculation');
-assert.match(mapEnrichment, /never changes a price, payment basis, source median, provenance family, or\s*\n?\s*local headline eligibility/i, 'map enrichment must remain presentation-only');
+assert.ok(mapEnrichment.includes('Adds approximate city/ZIP coordinates only for presentation on the Price Map.'), 'map enrichment must be presentation-only');
+assert.ok(mapEnrichment.includes('It never changes a price, payment basis, source median, provenance family, or'), 'map enrichment must not change pricing/provenance');
+assert.ok(mapEnrichment.includes('local headline eligibility decision. Local benchmark admission happens before'), 'map enrichment must not change local headline eligibility');
 
 assert.match(ui, /PROVENANCE-BALANCED MEDIAN/, 'UI must describe the current benchmark correctly');
 assert.doesNotMatch(ui, /SOURCE-BALANCED MEDIAN/, 'stale source-balanced label must not return');
