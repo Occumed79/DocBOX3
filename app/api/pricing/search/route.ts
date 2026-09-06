@@ -5,8 +5,10 @@ import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
 import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
 import { searchLoaCash } from '@/lib/pricing/adapters/loa';
 import { searchOccumedOpenCashSources } from '@/lib/pricing/adapters/occumed-open-sources';
+import { searchRadiologyAssistCash } from '@/lib/pricing/adapters/radiology-assist';
 import { PRIORITY_FEED_STATUS, searchTurquoiseRawCash } from '@/lib/pricing/adapters/priority-feeds';
 import { rankPricingEvidence } from '@/lib/pricing/evidence-ranking';
+import { enrichObservationsForMap } from '@/lib/pricing/map-enrichment';
 import { summarizePrices } from '@/lib/pricing/statistics';
 import { geocodeUsLocation, type ResolvedLocation } from '@/lib/pricing/geocode';
 import {
@@ -202,6 +204,17 @@ function familyBalancedMedian(sources: SourceResult[]) {
   };
 }
 
+async function enrichSourceObservationsForMap(sources: SourceResult[], local: boolean) {
+  const flattened = sources.flatMap((source) => source.observations);
+  const enriched = await enrichObservationsForMap(flattened, local ? 40 : 80);
+  let offset = 0;
+  return sources.map((source) => {
+    const observations = enriched.slice(offset, offset + source.observations.length);
+    offset += source.observations.length;
+    return { ...source, observations };
+  });
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')?.trim();
   const location = request.nextUrl.searchParams.get('location')?.trim() || undefined;
@@ -247,6 +260,12 @@ export async function GET(request: NextRequest) {
     longitude: resolvedLocation?.longitude,
     radiusMiles,
   });
+  const radiologyAssistPromise = searchRadiologyAssistCash({
+    procedureCode: procedure.code,
+    procedureName: procedure.name,
+    city: resolvedLocation?.city,
+    state: resolvedLocation?.state,
+  });
 
   const coreSourceResults = await Promise.all([
     runSource('medrates', 'MedRates.fyi', () => searchMedRatesCash({
@@ -271,7 +290,7 @@ export async function GET(request: NextRequest) {
     runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(cashSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
   ]);
 
-  const openSources = await openSourcesPromise;
+  const [openSources, radiologyAssist] = await Promise.all([openSourcesPromise, radiologyAssistPromise]);
   const openSourceResults: SourceResult[] = openSources.map((source) => ({
     sourceId: source.sourceId,
     sourceName: source.sourceName,
@@ -287,14 +306,29 @@ export async function GET(request: NextRequest) {
     dataRefreshed: source.dataRefreshed,
     headlineEligible: source.headlineEligible,
   }));
+  const radiologyAssistResult: SourceResult = {
+    sourceId: radiologyAssist.sourceId,
+    sourceName: radiologyAssist.sourceName,
+    provenanceFamily: radiologyAssist.provenanceFamily,
+    status: radiologyAssist.observations.length ? 'ok' : 'empty',
+    observations: radiologyAssist.observations,
+    summary: radiologyAssist.summary,
+    excludedByRadius: 0,
+    excludedWithoutCoordinates: 0,
+    attribution: radiologyAssist.attribution,
+    disclaimer: radiologyAssist.disclaimer,
+    sourceScope: radiologyAssist.sourceScope,
+    headlineEligible: radiologyAssist.headlineEligible,
+  };
 
-  const sourceResults = [...coreSourceResults, ...openSourceResults].filter((source) => source.status !== 'unconfigured');
+  const sourceResults = [...coreSourceResults, ...openSourceResults, radiologyAssistResult]
+    .filter((source) => source.status !== 'unconfigured');
   const allEligibleObservations = dedupeObservations(sourceResults.flatMap((source) => source.observations));
   const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
   const provenanceBalanced = familyBalancedMedian(sourceResults);
 
-  // AI ranks evidence quality only after the strict cash/self-pay filter and after all
-  // benchmark math has been computed. The national map skips external AI calls entirely.
+  // AI ranks evidence quality only after strict self-pay filtering and benchmark arithmetic.
+  // It never receives authority to alter a price or benchmark. National map requests skip AI.
   const ranking = location
     ? await rankPricingEvidence(sourceResults, {
       procedureCode: procedure.code,
@@ -321,7 +355,12 @@ export async function GET(request: NextRequest) {
     })
     .sort((a, b) => (a.evidenceRank ?? Number.MAX_SAFE_INTEGER) - (b.evidenceRank ?? Number.MAX_SAFE_INTEGER));
 
+  // Presentation-only geocoding is deliberately after benchmark calculation and AI ranking.
+  const responseSources = await enrichSourceObservationsForMap(rankedSourceResults, Boolean(location));
   const headlineSources = sourceResults.filter((source) => source.headlineEligible !== false && source.summary.median !== null);
+  const mappableObservationCount = responseSources
+    .flatMap((source) => source.observations)
+    .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).length;
 
   return NextResponse.json({
     procedure,
@@ -333,18 +372,19 @@ export async function GET(request: NextRequest) {
       excluded: ['Medicare', 'Medicaid', 'commercial negotiated', 'insurance allowed', 'claims average', 'gross charge', 'chargemaster', 'unknown'],
       combinationMethod: 'Headline benchmark is balanced by independent provenance family, not raw source count. Multiple aggregators of the same hospital MRF cash row receive one family-level vote. Pooled count/low/high are deduplicated by provenance family + provider + market + procedure + price.',
       geographicMethod: resolvedLocation && radiusMiles
-        ? 'Coordinate-capable sources are hard-filtered to the requested radius. Public sources without coordinates must independently restrict to an exact local market or remain supporting-only evidence.'
-        : 'No radius filter was applied.',
+        ? 'Coordinate-capable sources are hard-filtered to the requested radius. Public sources without coordinates must independently restrict to an exact local market or remain supporting-only evidence. Later geocoding is presentation-only and cannot admit a row into the benchmark.'
+        : 'No local radius filter was applied. Map-only geocoding may add approximate city/ZIP coordinates without affecting the benchmark.',
       rankingMethod: 'Cohere/Cerebras may rank evidence quality after strict filtering. Ranking is advisory only and cannot change a price, source median, pooled statistic, provenance-family median, or headline benchmark.',
       sourceGuardrails: {
         turquoise: 'OAuth API is queried with pricing.type=cash; negotiated/payer/network rows are rejected again after retrieval.',
-        hospitalMrfFamily: 'Turquoise, Hospital Ledger, PriceTransparency.io, MedRates, MedCompare and FairVisit are treated as one hospital-MRF provenance family so duplicated underlying rows cannot multiply their influence.',
+        hospitalMrfFamily: 'Turquoise, Hospital Ledger, PriceTransparency.io, MedRates, MedCompare, FairVisit and other MRF-derived cash sources share one hospital-MRF provenance family so duplicated underlying rows cannot multiply their influence.',
         marketCare: 'Only real cash quotes/provider cash menus are eligible; its public lowest-price index is supporting floor evidence, not a median vote.',
+        radiologyAssist: 'Only an exact study row on a local RadiologyAssist self-pay page is accepted; national averages and nonmatching imaging rows are rejected.',
         realDentalCosts: 'Only rows explicitly marked observed are eligible; modeled bands, Medicaid and insurance values are rejected.',
         labs: 'TestWell and LabTestInsight are direct-purchase/direct-pay evidence and are kept distinct from local clinic cash prices.',
       },
     },
-    sources: rankedSourceResults,
+    sources: responseSources,
     configuredFeeds: PRIORITY_FEED_STATUS,
     ranking,
     combined: { ...pooled, median: provenanceBalanced.median },
@@ -354,6 +394,10 @@ export async function GET(request: NextRequest) {
       provenanceFamilyCount: provenanceBalanced.familyMedians.length,
       familyMedians: provenanceBalanced.familyMedians,
       median: provenanceBalanced.median,
+    },
+    map: {
+      mappableObservationCount,
+      coordinateEnrichment: 'presentation-only',
     },
   });
 }
