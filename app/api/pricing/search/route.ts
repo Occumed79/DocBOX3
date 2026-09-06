@@ -4,16 +4,16 @@ import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
 import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
 import { searchLoaCash } from '@/lib/pricing/adapters/loa';
-import {
-  PRIORITY_FEED_STATUS,
-  searchClearHealthCostsCash,
-  searchFairHealthCash,
-  searchTurquoiseRawCash,
-} from '@/lib/pricing/adapters/priority-feeds';
+import { searchOccumedOpenCashSources } from '@/lib/pricing/adapters/occumed-open-sources';
+import { PRIORITY_FEED_STATUS, searchTurquoiseRawCash } from '@/lib/pricing/adapters/priority-feeds';
 import { rankPricingEvidence } from '@/lib/pricing/evidence-ranking';
 import { summarizePrices } from '@/lib/pricing/statistics';
 import { geocodeUsLocation, type ResolvedLocation } from '@/lib/pricing/geocode';
-import type { PriceObservationInput } from '@/lib/pricing/source-registry';
+import {
+  provenanceFamilyForSource,
+  type PriceObservationInput,
+  type ProvenanceFamily,
+} from '@/lib/pricing/source-registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +22,7 @@ type SourceStatus = 'ok' | 'empty' | 'error' | 'unconfigured';
 type SourceResult = {
   sourceId: string;
   sourceName: string;
+  provenanceFamily: ProvenanceFamily;
   status: SourceStatus;
   error?: string;
   observations: PriceObservationInput[];
@@ -32,6 +33,7 @@ type SourceResult = {
   disclaimer?: string;
   sourceScope?: string;
   dataRefreshed?: string;
+  headlineEligible?: boolean;
   evidenceRank?: number;
   evidenceScore?: number;
   evidenceReason?: string;
@@ -41,12 +43,14 @@ function emptySource(sourceId: string, sourceName: string, status: SourceStatus,
   return {
     sourceId,
     sourceName,
+    provenanceFamily: provenanceFamilyForSource(sourceId),
     status,
     error,
     observations: [],
     summary: summarizePrices([]),
     excludedByRadius: 0,
     excludedWithoutCoordinates: 0,
+    headlineEligible: false,
   };
 }
 
@@ -100,11 +104,13 @@ async function runSource(
     return {
       sourceId,
       sourceName,
+      provenanceFamily: provenanceFamilyForSource(sourceId),
       status: filtered.observations.length ? 'ok' : 'empty',
       observations: filtered.observations,
       summary: summarizePrices(filtered.observations.map((item) => item.price)),
       excludedByRadius: filtered.excludedByRadius,
       excludedWithoutCoordinates: filtered.excludedWithoutCoordinates,
+      headlineEligible: filtered.observations.length > 0,
     };
   } catch (error) {
     return emptySource(
@@ -136,6 +142,7 @@ async function runFairVisitSource(
     return {
       sourceId: 'fairvisit-health',
       sourceName: 'FairVisitHealth',
+      provenanceFamily: provenanceFamilyForSource('fairvisit-health'),
       status: hasUsefulData ? 'ok' : 'empty',
       observations: result.observations,
       summary: result.summary,
@@ -145,6 +152,7 @@ async function runFairVisitSource(
       disclaimer: result.disclaimer,
       sourceScope: result.sourceScope,
       dataRefreshed: result.dataRefreshed,
+      headlineEligible: hasUsefulData,
     };
   } catch (error) {
     return emptySource(
@@ -154,6 +162,44 @@ async function runFairVisitSource(
       error instanceof Error ? error.message : 'FairVisitHealth search failed.',
     );
   }
+}
+
+function dedupeObservations(observations: PriceObservationInput[]) {
+  const seen = new Set<string>();
+  const deduped: PriceObservationInput[] = [];
+  for (const item of observations) {
+    const family = provenanceFamilyForSource(item.sourceId);
+    const provider = (item.providerName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    const place = [item.city, item.state, item.postalCode].filter(Boolean).join('|').toLowerCase();
+    const providerKey = provider || `source:${item.sourceId}`;
+    const key = [family, providerKey, place, item.procedureCode.toUpperCase(), item.price.toFixed(2)].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
+}
+
+function familyBalancedMedian(sources: SourceResult[]) {
+  const byFamily = new Map<ProvenanceFamily, number[]>();
+  for (const source of sources) {
+    if (source.headlineEligible === false) continue;
+    const median = source.summary.median;
+    if (median === null || !Number.isFinite(median)) continue;
+    const values = byFamily.get(source.provenanceFamily) || [];
+    values.push(median);
+    byFamily.set(source.provenanceFamily, values);
+  }
+
+  const familyMedians = [...byFamily.entries()].flatMap(([family, values]) => {
+    const median = summarizePrices(values).median;
+    return median === null ? [] : [{ family, median, sourceCount: values.length }];
+  });
+
+  return {
+    median: summarizePrices(familyMedians.map((item) => item.median)).median,
+    familyMedians,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -181,7 +227,7 @@ export async function GET(request: NextRequest) {
   }
 
   const sourceLocation = resolvedLocation?.state || location;
-  const licensedSearch = {
+  const cashSearch = {
     procedureCode: procedure.code,
     procedureName: procedure.name,
     location,
@@ -191,7 +237,18 @@ export async function GET(request: NextRequest) {
   };
   const configured = Object.fromEntries(PRIORITY_FEED_STATUS.map((source) => [source.id, source.configured]));
 
-  const allSourceResults = await Promise.all([
+  const openSourcesPromise = searchOccumedOpenCashSources({
+    procedureCode: procedure.code,
+    procedureName: procedure.name,
+    city: resolvedLocation?.city,
+    state: resolvedLocation?.state,
+    postalCode: resolvedLocation?.postalCode,
+    latitude: resolvedLocation?.latitude,
+    longitude: resolvedLocation?.longitude,
+    radiusMiles,
+  });
+
+  const coreSourceResults = await Promise.all([
     runSource('medrates', 'MedRates.fyi', () => searchMedRatesCash({
       procedureCode: procedure.code,
       procedureName: procedure.name,
@@ -211,19 +268,30 @@ export async function GET(request: NextRequest) {
       city: resolvedLocation?.city,
       state: resolvedLocation?.state,
     }), resolvedLocation, radiusMiles),
-    runSource('clear-health-costs', 'ClearHealthCosts', () => searchClearHealthCostsCash(licensedSearch), resolvedLocation, radiusMiles, configured['clear-health-costs']),
-    runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(licensedSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
-    runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
+    runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(cashSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
   ]);
 
-  const sourceResults = allSourceResults.filter((source) => source.status !== 'unconfigured');
-  const allEligibleObservations = sourceResults.flatMap((source) => source.observations);
-  const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
+  const openSources = await openSourcesPromise;
+  const openSourceResults: SourceResult[] = openSources.map((source) => ({
+    sourceId: source.sourceId,
+    sourceName: source.sourceName,
+    provenanceFamily: source.provenanceFamily,
+    status: source.summary.count > 0 || source.summary.median !== null ? 'ok' : 'empty',
+    observations: source.observations,
+    summary: source.summary,
+    excludedByRadius: 0,
+    excludedWithoutCoordinates: 0,
+    attribution: source.attribution,
+    disclaimer: source.disclaimer,
+    sourceScope: source.sourceScope,
+    dataRefreshed: source.dataRefreshed,
+    headlineEligible: source.headlineEligible,
+  }));
 
-  const sourceMedians = sourceResults
-    .map((source) => source.summary.median)
-    .filter((value): value is number => value !== null && Number.isFinite(value));
-  const sourceBalancedMedian = summarizePrices(sourceMedians).median;
+  const sourceResults = [...coreSourceResults, ...openSourceResults].filter((source) => source.status !== 'unconfigured');
+  const allEligibleObservations = dedupeObservations(sourceResults.flatMap((source) => source.observations));
+  const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
+  const provenanceBalanced = familyBalancedMedian(sourceResults);
 
   // AI ranks evidence quality only after the strict cash/self-pay filter and after all
   // benchmark math has been computed. The national map skips external AI calls entirely.
@@ -253,6 +321,8 @@ export async function GET(request: NextRequest) {
     })
     .sort((a, b) => (a.evidenceRank ?? Number.MAX_SAFE_INTEGER) - (b.evidenceRank ?? Number.MAX_SAFE_INTEGER));
 
+  const headlineSources = sourceResults.filter((source) => source.headlineEligible !== false && source.summary.median !== null);
+
   return NextResponse.json({
     procedure,
     location: location ?? null,
@@ -261,24 +331,29 @@ export async function GET(request: NextRequest) {
     policy: {
       includedPaymentBases: ['cash', 'self_pay', 'discounted_cash', 'uninsured', 'direct_pay', 'marketplace_cash'],
       excluded: ['Medicare', 'Medicaid', 'commercial negotiated', 'insurance allowed', 'claims average', 'gross charge', 'chargemaster', 'unknown'],
-      combinationMethod: 'Sources remain separate. Headline median is the median of live source medians; low/high and count reflect pooled eligible cash observations.',
+      combinationMethod: 'Headline benchmark is balanced by independent provenance family, not raw source count. Multiple aggregators of the same hospital MRF cash row receive one family-level vote. Pooled count/low/high are deduplicated by provenance family + provider + market + procedure + price.',
       geographicMethod: resolvedLocation && radiusMiles
-        ? 'Only observations verified inside the requested market are included; source-level state/national fallbacks are not allowed into the local headline benchmark.'
+        ? 'Coordinate-capable sources are hard-filtered to the requested radius. Public sources without coordinates must independently restrict to an exact local market or remain supporting-only evidence.'
         : 'No radius filter was applied.',
-      rankingMethod: 'Cohere/Cerebras may rank evidence quality after strict filtering. Ranking is advisory only and cannot change a price, source median, pooled statistic, or headline benchmark.',
+      rankingMethod: 'Cohere/Cerebras may rank evidence quality after strict filtering. Ranking is advisory only and cannot change a price, source median, pooled statistic, provenance-family median, or headline benchmark.',
       sourceGuardrails: {
-        fairHealth: 'Out-of-network/uninsured full-charge benchmarks and claims-derived amounts are not eligible. Only an explicitly licensed cash/self-pay field is accepted.',
-        turquoise: 'Consumer Pricing composite estimates, negotiated rates, claims-derived values, and Medicare reference signals are not eligible. Only raw provider-published cash/discounted-cash fields are accepted.',
-        clearHealthCosts: 'Only explicit cash/self-pay observations from the permitted API/feed are accepted.',
-        fairVisitHealth: 'Only hospital-published discounted cash values are eligible. Medicare fields, national composite context, and state fallback medians are ignored.',
-        loa: 'Only source-labeled cash, discounted-cash, or package-cash rows for an exact-city entity set are accepted. Negotiated rows and generic MRF rows without an explicit cash label are rejected.',
+        turquoise: 'OAuth API is queried with pricing.type=cash; negotiated/payer/network rows are rejected again after retrieval.',
+        hospitalMrfFamily: 'Turquoise, Hospital Ledger, PriceTransparency.io, MedRates, MedCompare and FairVisit are treated as one hospital-MRF provenance family so duplicated underlying rows cannot multiply their influence.',
+        marketCare: 'Only real cash quotes/provider cash menus are eligible; its public lowest-price index is supporting floor evidence, not a median vote.',
+        realDentalCosts: 'Only rows explicitly marked observed are eligible; modeled bands, Medicaid and insurance values are rejected.',
+        labs: 'TestWell and LabTestInsight are direct-purchase/direct-pay evidence and are kept distinct from local clinic cash prices.',
       },
     },
     sources: rankedSourceResults,
     configuredFeeds: PRIORITY_FEED_STATUS,
     ranking,
-    combined: { ...pooled, median: sourceBalancedMedian },
+    combined: { ...pooled, median: provenanceBalanced.median },
     pooled,
-    benchmark: { sourceCount: sourceMedians.length, median: sourceBalancedMedian },
+    benchmark: {
+      sourceCount: headlineSources.length,
+      provenanceFamilyCount: provenanceBalanced.familyMedians.length,
+      familyMedians: provenanceBalanced.familyMedians,
+      median: provenanceBalanced.median,
+    },
   });
 }
