@@ -44,6 +44,7 @@ export type FairVisitCashResult = {
   disclaimer?: string;
   sourceScope?: string;
   dataRefreshed?: string;
+  localBenchmarkEligible: boolean;
 };
 
 function validNumber(value: unknown): value is number {
@@ -97,18 +98,21 @@ export async function searchFairVisitCash(input: {
       if (accepted) observations.push(accepted);
     }
 
-    // The facilities array is explicitly the cheapest nearby facilities, so do NOT derive
-    // the source median from those rows. Use FairVisitHealth's one-hospital-per-source area
-    // cash distribution instead. The separate medicare_rate field is intentionally ignored.
+    // FairVisit's national benchmark includes other public benchmark signals and its area
+    // value may fall back to an entire state when local density is weak. Neither is allowed
+    // to masquerade as the requested local cash market. Only a genuinely local area scope
+    // participates in our source-balanced median. Medicare is never read at all.
+    const scope = payload.area?.scope?.toLowerCase() || '';
+    const localBenchmarkEligible = Boolean(scope && !scope.includes('state') && !scope.includes('national'));
     const base = summarizePrices([]);
     const summary = {
       ...base,
-      count: validNumber(payload.area?.n_sources) ? Math.round(payload.area!.n_sources!) : observations.length,
+      count: localBenchmarkEligible && validNumber(payload.area?.n_sources) ? Math.round(payload.area!.n_sources!) : observations.length,
       low: observations.length ? Math.min(...observations.map((item) => item.price)) : null,
-      median: validNumber(payload.area?.median) ? payload.area!.median! : null,
+      median: localBenchmarkEligible && validNumber(payload.area?.median) ? payload.area!.median! : null,
       high: observations.length ? Math.max(...observations.map((item) => item.price)) : null,
-      p25: validNumber(payload.area?.p25) ? payload.area!.p25! : null,
-      p75: validNumber(payload.area?.p75) ? payload.area!.p75! : null,
+      p25: localBenchmarkEligible && validNumber(payload.area?.p25) ? payload.area!.p25! : null,
+      p75: localBenchmarkEligible && validNumber(payload.area?.p75) ? payload.area!.p75! : null,
     };
 
     return {
@@ -118,6 +122,7 @@ export async function searchFairVisitCash(input: {
       disclaimer: payload.disclaimer,
       sourceScope: payload.area?.scope,
       dataRefreshed: payload.data_refreshed,
+      localBenchmarkEligible,
     };
   } finally {
     clearTimeout(timeout);
