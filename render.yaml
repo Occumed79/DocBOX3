@@ -13,19 +13,9 @@ services:
       - key: NEXT_PUBLIC_MAPTILER_KEY
         sync: false
 
-      # ClearHealthCosts permitted API/feed. URL may contain placeholders:
-      # {code} {procedure} {location} {lat} {lon} {radius}
-      - key: CLEARHEALTHCOSTS_API_URL
-        sync: false
-      - key: CLEARHEALTHCOSTS_API_KEY
-        sync: false
-      - key: CLEARHEALTHCOSTS_API_KEY_HEADER
-        sync: false
-      - key: CLEARHEALTHCOSTS_API_METHOD
-        value: GET
-
-      # Turquoise Consumer Pricing API OAuth 2.0 client credentials.
-      # The backend mints/caches short-lived bearer tokens and requests cash pricing only.
+      # Turquoise OAuth — the only price-source credential currently required.
+      # The app mints/caches short-lived bearer tokens automatically and queries
+      # only pricing.type=cash.
       - key: TURQUOISE_ORGANIZATION_ID
         sync: false
       - key: TURQUOISE_CLIENT_ID
@@ -33,16 +23,12 @@ services:
       - key: TURQUOISE_CLIENT_SECRET
         sync: false
 
-      # FAIR Health: only a licensed endpoint whose returned field is explicitly
-      # cash/self-pay. Out-of-network charges and claims/allowed benchmarks are excluded.
-      - key: FAIR_HEALTH_CASH_FEED_URL
-        sync: false
-      - key: FAIR_HEALTH_CASH_FEED_TOKEN
-        sync: false
-      - key: FAIR_HEALTH_CASH_FEED_TOKEN_HEADER
-        sync: false
-      - key: FAIR_HEALTH_CASH_FEED_METHOD
-        value: GET
+      # Other active public price sources require no Render secret:
+      # Hospital Ledger, PriceTransparency.io, MarketCare, Expected Health,
+      # TestWell, LabTestInsight and Real Dental Costs. Public-page sources such
+      # as Solv ClearPrice, RadiologyAssist, DENTALPRICE, DirectMedicine,
+      # MDsave, Sesame and SumHealth are registered with explicit provenance and
+      # are only admitted when a deterministic cash/self-pay observation exists.
 
       # Advisory evidence ranking only. These server-side keys never affect price math.
       # Secondary keys are used only as failover for auth/rate-limit failures.
