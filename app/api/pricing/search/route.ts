@@ -2,22 +2,43 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PROCEDURES } from '@/lib/pricing/procedures';
 import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
+import {
+  PRIORITY_FEED_STATUS,
+  searchClearHealthCostsCash,
+  searchFairHealthCash,
+  searchTurquoiseRawCash,
+} from '@/lib/pricing/adapters/priority-feeds';
 import { summarizePrices } from '@/lib/pricing/statistics';
 import { geocodeUsLocation, type ResolvedLocation } from '@/lib/pricing/geocode';
 import type { PriceObservationInput } from '@/lib/pricing/source-registry';
 
 export const dynamic = 'force-dynamic';
 
+type SourceStatus = 'ok' | 'empty' | 'error' | 'unconfigured';
+
 type SourceResult = {
   sourceId: string;
   sourceName: string;
-  status: 'ok' | 'empty' | 'error';
+  status: SourceStatus;
   error?: string;
   observations: PriceObservationInput[];
   summary: ReturnType<typeof summarizePrices>;
   excludedByRadius: number;
   excludedWithoutCoordinates: number;
 };
+
+function emptySource(sourceId: string, sourceName: string, status: SourceStatus, error?: string): SourceResult {
+  return {
+    sourceId,
+    sourceName,
+    status,
+    error,
+    observations: [],
+    summary: summarizePrices([]),
+    excludedByRadius: 0,
+    excludedWithoutCoordinates: 0,
+  };
+}
 
 function milesBetween(lat1: number, lon1: number, lat2: number, lon2: number) {
   const toRadians = (degrees: number) => degrees * Math.PI / 180;
@@ -29,14 +50,8 @@ function milesBetween(lat1: number, lon1: number, lat2: number, lon2: number) {
   return 2 * earthRadiusMiles * Math.asin(Math.sqrt(a));
 }
 
-function applyRadius(
-  observations: PriceObservationInput[],
-  center: ResolvedLocation | null,
-  radiusMiles: number | null,
-) {
-  if (!center || !radiusMiles) {
-    return { observations, excludedByRadius: 0, excludedWithoutCoordinates: 0 };
-  }
+function applyRadius(observations: PriceObservationInput[], center: ResolvedLocation | null, radiusMiles: number | null) {
+  if (!center || !radiusMiles) return { observations, excludedByRadius: 0, excludedWithoutCoordinates: 0 };
 
   const included: PriceObservationInput[] = [];
   let excludedByRadius = 0;
@@ -66,7 +81,9 @@ async function runSource(
   runner: () => Promise<PriceObservationInput[]>,
   center: ResolvedLocation | null,
   radiusMiles: number | null,
+  configured = true,
 ): Promise<SourceResult> {
+  if (!configured) return emptySource(sourceId, sourceName, 'unconfigured');
   try {
     const raw = await runner();
     const filtered = applyRadius(raw, center, radiusMiles);
@@ -80,16 +97,12 @@ async function runSource(
       excludedWithoutCoordinates: filtered.excludedWithoutCoordinates,
     };
   } catch (error) {
-    return {
+    return emptySource(
       sourceId,
       sourceName,
-      status: 'error',
-      error: error instanceof Error ? error.message : `${sourceName} search failed.`,
-      observations: [],
-      summary: summarizePrices([]),
-      excludedByRadius: 0,
-      excludedWithoutCoordinates: 0,
-    };
+      'error',
+      error instanceof Error ? error.message : `${sourceName} search failed.`,
+    );
   }
 }
 
@@ -101,9 +114,7 @@ export async function GET(request: NextRequest) {
     ? Math.min(radiusParam, 250)
     : location ? 50 : null;
 
-  if (!code) {
-    return NextResponse.json({ error: 'A procedure code is required.' }, { status: 400 });
-  }
+  if (!code) return NextResponse.json({ error: 'A procedure code is required.' }, { status: 400 });
 
   const procedure = PROCEDURES.find((item) => item.code.toLowerCase() === code.toLowerCase());
   if (!procedure) {
@@ -117,10 +128,18 @@ export async function GET(request: NextRequest) {
     }, { status: 422 });
   }
 
-  // MedRates uses the exact resolved coordinates. MedCompare needs state context.
   const sourceLocation = resolvedLocation?.state || location;
+  const licensedSearch = {
+    procedureCode: procedure.code,
+    procedureName: procedure.name,
+    location,
+    latitude: resolvedLocation?.latitude,
+    longitude: resolvedLocation?.longitude,
+    radiusMiles,
+  };
+  const configured = Object.fromEntries(PRIORITY_FEED_STATUS.map((source) => [source.id, source.configured]));
 
-  const [medRates, medCompare] = await Promise.all([
+  const sourceResults = await Promise.all([
     runSource('medrates', 'MedRates.fyi', () => searchMedRatesCash({
       procedureCode: procedure.code,
       procedureName: procedure.name,
@@ -133,14 +152,15 @@ export async function GET(request: NextRequest) {
       procedureName: procedure.name,
       location: sourceLocation,
     }), resolvedLocation, radiusMiles),
+    runSource('clear-health-costs', 'ClearHealthCosts', () => searchClearHealthCostsCash(licensedSearch), resolvedLocation, radiusMiles, configured['clear-health-costs']),
+    runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(licensedSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
+    runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
   ]);
 
-  const sourceResults = [medRates, medCompare];
   const allEligibleObservations = sourceResults.flatMap((source) => source.observations);
   const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
 
-  // Keep sources analytically separate. A source with many more rows should not
-  // dominate the headline benchmark simply because it contributes more records.
+  // Each source gets one vote in the headline median regardless of its row count.
   const sourceMedians = sourceResults
     .map((source) => source.summary.median)
     .filter((value): value is number => value !== null && Number.isFinite(value));
@@ -154,20 +174,19 @@ export async function GET(request: NextRequest) {
     policy: {
       includedPaymentBases: ['cash', 'self_pay', 'discounted_cash', 'uninsured', 'direct_pay', 'marketplace_cash'],
       excluded: ['Medicare', 'Medicaid', 'commercial negotiated', 'insurance allowed', 'claims average', 'gross charge', 'chargemaster', 'unknown'],
-      combinationMethod: 'Sources remain separate. Headline median is the median of live source medians; low/high and count reflect the pooled eligible observations.',
+      combinationMethod: 'Sources remain separate. Headline median is the median of live source medians; low/high and count reflect pooled eligible cash observations.',
       geographicMethod: resolvedLocation && radiusMiles
         ? `Only observations with verifiable coordinates within ${radiusMiles} miles of the resolved search location are included.`
         : 'No radius filter was applied.',
+      sourceGuardrails: {
+        fairHealth: 'Out-of-network/uninsured full-charge benchmarks and claims-derived amounts are not eligible. Only an explicitly licensed cash/self-pay field is accepted.',
+        turquoise: 'Consumer Pricing composite estimates, negotiated rates, claims-derived values, and Medicare reference signals are not eligible. Only raw provider-published cash/discounted-cash fields are accepted.',
+        clearHealthCosts: 'Only explicit cash/self-pay observations from the permitted API/feed are accepted.',
+      },
     },
     sources: sourceResults,
-    combined: {
-      ...pooled,
-      median: sourceBalancedMedian,
-    },
+    combined: { ...pooled, median: sourceBalancedMedian },
     pooled,
-    benchmark: {
-      sourceCount: sourceMedians.length,
-      median: sourceBalancedMedian,
-    },
+    benchmark: { sourceCount: sourceMedians.length, median: sourceBalancedMedian },
   });
 }
