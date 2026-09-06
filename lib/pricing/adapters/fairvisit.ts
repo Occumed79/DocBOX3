@@ -43,6 +43,7 @@ export type FairVisitCashResult = {
   attribution?: string;
   disclaimer?: string;
   sourceScope?: string;
+  facilityScope?: string;
   dataRefreshed?: string;
   localBenchmarkEligible: boolean;
 };
@@ -77,31 +78,34 @@ export async function searchFairVisitCash(input: {
     const payload = await response.json() as FairVisitResponse;
     if (!payload.ok) throw new Error('FairVisitHealth did not return a successful cash-price result.');
 
+    const facilityScope = payload.facility_scope?.toLowerCase() || '';
+    const useFacilityRows = !facilityScope || facilityScope === 'radius';
     const observations: PriceObservationInput[] = [];
-    for (const facility of payload.facilities || []) {
-      if (!validNumber(facility.cash_price)) continue;
-      const accepted = acceptSelfPayObservation({
-        sourceId: 'fairvisit-health',
-        procedureCode: input.procedureCode,
-        procedureName: input.procedureName,
-        price: facility.cash_price,
-        paymentBasis: 'discounted_cash',
-        providerName: facility.name,
-        city: facility.city,
-        state: facility.state,
-        latitude: validNumber(facility.latitude) ? facility.latitude : validNumber(facility.lat) ? facility.lat : undefined,
-        longitude: typeof facility.longitude === 'number' && Number.isFinite(facility.longitude) ? facility.longitude
-          : typeof facility.lng === 'number' && Number.isFinite(facility.lng) ? facility.lng : undefined,
-        observedAt: facility.last_updated || payload.data_refreshed,
-        sourceUrl: payload.member_url,
-      });
-      if (accepted) observations.push(accepted);
+    if (useFacilityRows) {
+      for (const facility of payload.facilities || []) {
+        if (!validNumber(facility.cash_price)) continue;
+        const accepted = acceptSelfPayObservation({
+          sourceId: 'fairvisit-health',
+          procedureCode: input.procedureCode,
+          procedureName: input.procedureName,
+          price: facility.cash_price,
+          paymentBasis: 'discounted_cash',
+          providerName: facility.name,
+          city: facility.city,
+          state: facility.state,
+          latitude: validNumber(facility.latitude) ? facility.latitude : validNumber(facility.lat) ? facility.lat : undefined,
+          longitude: typeof facility.longitude === 'number' && Number.isFinite(facility.longitude) ? facility.longitude
+            : typeof facility.lng === 'number' && Number.isFinite(facility.lng) ? facility.lng : undefined,
+          observedAt: facility.last_updated || payload.data_refreshed,
+          sourceUrl: payload.member_url,
+        });
+        if (accepted) observations.push(accepted);
+      }
     }
 
-    // FairVisit's national benchmark includes other public benchmark signals and its area
-    // value may fall back to an entire state when local density is weak. Neither is allowed
-    // to masquerade as the requested local cash market. Only a genuinely local area scope
-    // participates in our source-balanced median. Medicare is never read at all.
+    // The API also returns national and Medicare context. Those fields are intentionally
+    // ignored. Its area result may fall back to the entire state when local density is weak;
+    // that fallback is not allowed to participate in our local source-balanced median.
     const scope = payload.area?.scope?.toLowerCase() || '';
     const localBenchmarkEligible = Boolean(scope && !scope.includes('state') && !scope.includes('national'));
     const base = summarizePrices([]);
@@ -121,6 +125,7 @@ export async function searchFairVisitCash(input: {
       attribution: payload.attribution?.text,
       disclaimer: payload.disclaimer,
       sourceScope: payload.area?.scope,
+      facilityScope: payload.facility_scope,
       dataRefreshed: payload.data_refreshed,
       localBenchmarkEligible,
     };
