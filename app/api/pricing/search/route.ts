@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
   };
   const configured = Object.fromEntries(PRIORITY_FEED_STATUS.map((source) => [source.id, source.configured]));
 
-  const sourceResults = await Promise.all([
+  const allSourceResults = await Promise.all([
     runSource('medrates', 'MedRates.fyi', () => searchMedRatesCash({
       procedureCode: procedure.code,
       procedureName: procedure.name,
@@ -203,6 +203,9 @@ export async function GET(request: NextRequest) {
     runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
   ]);
 
+  // An adapter existing in code is not the same thing as a live feed. Do not send
+  // unconfigured licensed feeds to the client as if they had been queried.
+  const sourceResults = allSourceResults.filter((source) => source.status !== 'unconfigured');
   const allEligibleObservations = sourceResults.flatMap((source) => source.observations);
   const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
 
@@ -222,7 +225,7 @@ export async function GET(request: NextRequest) {
       excluded: ['Medicare', 'Medicaid', 'commercial negotiated', 'insurance allowed', 'claims average', 'gross charge', 'chargemaster', 'unknown'],
       combinationMethod: 'Sources remain separate. Headline median is the median of live source medians; low/high and count reflect pooled eligible cash observations.',
       geographicMethod: resolvedLocation && radiusMiles
-        ? `Only observations verified inside the requested market are included; source-level state/national fallbacks are not allowed into the local headline benchmark.`
+        ? 'Only observations verified inside the requested market are included; source-level state/national fallbacks are not allowed into the local headline benchmark.'
         : 'No radius filter was applied.',
       sourceGuardrails: {
         fairHealth: 'Out-of-network/uninsured full-charge benchmarks and claims-derived amounts are not eligible. Only an explicitly licensed cash/self-pay field is accepted.',
@@ -232,6 +235,7 @@ export async function GET(request: NextRequest) {
       },
     },
     sources: sourceResults,
+    configuredFeeds: PRIORITY_FEED_STATUS,
     combined: { ...pooled, median: sourceBalancedMedian },
     pooled,
     benchmark: { sourceCount: sourceMedians.length, median: sourceBalancedMedian },
