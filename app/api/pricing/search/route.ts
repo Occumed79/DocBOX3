@@ -4,6 +4,7 @@ import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
 import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
 import { searchOpenDocCash } from '@/lib/pricing/adapters/opendoc';
+import { searchLoaCash } from '@/lib/pricing/adapters/loa';
 import {
   PRIORITY_FEED_STATUS,
   searchClearHealthCostsCash,
@@ -206,6 +207,12 @@ export async function GET(request: NextRequest) {
       procedureName: procedure.name,
       state: resolvedLocation?.state,
     }), resolvedLocation, radiusMiles),
+    runSource('loa', 'Loa', () => searchLoaCash({
+      procedureCode: procedure.code,
+      procedureName: procedure.name,
+      city: resolvedLocation?.city,
+      state: resolvedLocation?.state,
+    }), resolvedLocation, radiusMiles),
     runSource('clear-health-costs', 'ClearHealthCosts', () => searchClearHealthCostsCash(licensedSearch), resolvedLocation, radiusMiles, configured['clear-health-costs']),
     runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(licensedSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
     runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
@@ -238,6 +245,7 @@ export async function GET(request: NextRequest) {
         clearHealthCosts: 'Only explicit cash/self-pay observations from the permitted API/feed are accepted.',
         fairVisitHealth: 'Only hospital-published discounted cash values are eligible. Medicare fields, national composite context, and state fallback medians are ignored.',
         openDoc: 'Only explicit provider x service posted cash offers are accepted. Typical estimates, Sure Price context, and non-offer values are ignored.',
+        loa: 'Only source-labeled cash, discounted-cash, or package-cash rows for an exact-city entity set are accepted. Negotiated rows and generic MRF rows without an explicit cash label are rejected.',
       },
     },
     sources: sourceResults,
