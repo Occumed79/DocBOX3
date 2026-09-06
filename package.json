@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "verify:pricing": "node scripts/verify-pricing-integrity.mjs",
+    "verify:public-sources": "node scripts/public-source-smoke.mjs",
     "verify:runtime": "node scripts/runtime-source-matrix.mjs"
   },
   "dependencies": {
