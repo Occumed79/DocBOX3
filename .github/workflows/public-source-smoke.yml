@@ -1,0 +1,70 @@
+name: Public cash-source smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/self-pay-price-intelligence
+    paths:
+      - '.github/workflows/public-source-smoke.yml'
+      - 'scripts/public-source-smoke.mjs'
+      - 'lib/pricing/adapters/**'
+      - 'lib/pricing/source-registry.ts'
+      - 'app/api/pricing/search/route.ts'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+jobs:
+  public-source-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Verify pricing integrity
+        run: npm run verify:pricing
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Start production server
+        run: |
+          PORT=3000 npm start > /tmp/price-intelligence.log 2>&1 &
+          echo $! > /tmp/price-intelligence.pid
+          for i in {1..30}; do
+            if curl -fsSI http://127.0.0.1:3000/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/price-intelligence.log
+          exit 1
+
+      - name: Exercise live public cash sources
+        env:
+          PRICE_INTELLIGENCE_BASE_URL: http://127.0.0.1:3000
+        run: npm run verify:public-sources
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/price-intelligence.log || true
+
+      - name: Upload public-source report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-source-smoke
+          path: public-source-smoke.json
+          if-no-files-found: ignore
