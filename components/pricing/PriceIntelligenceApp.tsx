@@ -41,6 +41,10 @@ type SourceResult = {
   summary: PriceSummary;
   excludedByRadius?: number;
   excludedWithoutCoordinates?: number;
+  attribution?: string;
+  disclaimer?: string;
+  sourceScope?: string;
+  dataRefreshed?: string;
 };
 
 type PricingSearchResponse = {
@@ -72,6 +76,13 @@ const RADII = [25, 50, 75, 100];
 function money(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDate(value?: string) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
 }
 
 function ProcedurePicker({ value, onChange }: { value: ProcedureDefinition; onChange: (procedure: ProcedureDefinition) => void }) {
@@ -133,8 +144,8 @@ function RadiusField({ value, onChange }: { value: number; onChange: (radius: nu
 function SourceBadges() {
   return (
     <div className="pi-source-row">
-      {PRICING_SOURCES.slice(0, 3).map((source) => <span key={source.id}>{source.name}</span>)}
-      <span>+ {PRICING_SOURCES.length - 3} eligible sources</span>
+      {PRICING_SOURCES.slice(0, 4).map((source) => <span key={source.id}>{source.name}</span>)}
+      <span>+ {Math.max(0, PRICING_SOURCES.length - 4)} eligible sources</span>
     </div>
   );
 }
@@ -211,6 +222,14 @@ export default function PriceIntelligenceApp() {
       : variancePercent <= 25 ? 'Moderately above market'
         : variancePercent <= 50 ? 'High relative to market'
           : 'Very high relative to market';
+
+  const reportSources = compareResult?.sources.filter((source) => source.summary.median !== null || source.observations.length > 0) || [];
+  const reportMarket = compareResult?.resolvedLocation?.displayName || compareResult?.location || location || 'Selected market';
+  const reportRadius = compareResult?.radiusMiles || radius;
+  const reportVarianceDollars = compareMedian !== null && Number.isFinite(quote) ? quote - compareMedian : null;
+  const reportFinding = compareMedian !== null && variancePercent !== null
+    ? `The quoted fee of ${money(quote)} is ${Math.abs(variancePercent).toFixed(1)}% ${variancePercent >= 0 ? 'above' : 'below'} the source-balanced self-pay median of ${money(compareMedian)} for the selected market. ${quoteAssessment}.`
+    : '';
 
   async function runLookup() {
     setLookupLoading(true);
@@ -324,7 +343,7 @@ export default function PriceIntelligenceApp() {
             )}
 
             <div className="pi-source-results">
-              {PRICING_SOURCES.slice(0, 7).map((source) => {
+              {PRICING_SOURCES.slice(0, 8).map((source) => {
                 const live = lookupResult?.sources.find((item) => item.sourceId === source.id);
                 const excluded = (live?.excludedByRadius || 0) + (live?.excludedWithoutCoordinates || 0);
                 return (
@@ -336,6 +355,8 @@ export default function PriceIntelligenceApp() {
                         <strong>{money(live.summary.median)}</strong>
                         <span>median · {live.summary.count} verified local records</span>
                         <small>{money(live.summary.low)} – {money(live.summary.high)}{excluded ? ` · ${excluded} excluded by geography` : ''}</small>
+                        {live.sourceScope && <small>Scope: {live.sourceScope}</small>}
+                        {live.attribution && <small>{live.attribution}</small>}
                       </div>
                     ) : live?.status === 'error' ? (
                       <div className="pi-empty-value">Source error: {live.error}</div>
@@ -390,7 +411,8 @@ export default function PriceIntelligenceApp() {
                 <div className="pi-assessment">
                   <span>MARKET INTERPRETATION</span>
                   <h2>{quoteAssessment}</h2>
-                  <p>Based on {compareResult.combined.count} explicit self-pay observations within {compareResult.radiusMiles || radius} miles of {compareResult.resolvedLocation?.displayName || location || 'the selected market'}. Source-specific results remain separate and will be preserved in the leadership report.</p>
+                  <p>Based on {compareResult.combined.count} explicit self-pay observations within {reportRadius} miles of {reportMarket}. Source-specific results remain separate and are preserved in the leadership report.</p>
+                  <button className="pi-secondary pi-report-open" type="button" onClick={() => setSection('reports')}>Open leadership brief →</button>
                 </div>
               </div>
             )}
@@ -398,24 +420,102 @@ export default function PriceIntelligenceApp() {
         )}
 
         {section === 'reports' && (
-          <div className="pi-workspace narrow">
-            <div className="pi-section-heading"><span className="pi-eyebrow">LEADERSHIP BRIEFS</span><h1>Turn the evidence into a decision document.</h1><p>Reports preserve source-by-source evidence, geographic context, market distribution, methodology, and quote variance without hiding the underlying data.</p></div>
-            <div className="pi-report-preview glass-panel">
-              <div className="pi-report-paper">
-                <span>SELF-PAY PRICING ANALYSIS</span>
-                <h2>{compareResult ? `${compareProcedure.name} · ${compareProcedure.code}` : 'Provider Pricing Comparison'}</h2>
-                <div className="pi-report-rule" />
-                {compareResult && compareMedian && variancePercent !== null ? (
-                  <>
-                    <p className="pi-report-lead">Quoted fee {money(quote)} · self-pay median {money(compareMedian)} · variance {variancePercent >= 0 ? '+' : ''}{variancePercent.toFixed(1)}%</p>
-                    <div className="pi-report-metrics"><div><span>Quote</span><strong>{money(quote)}</strong></div><div><span>Median</span><strong>{money(compareMedian)}</strong></div><div><span>Observations</span><strong>{compareResult.combined.count}</strong></div></div>
-                  </>
-                ) : (
-                  <><p>No comparison has been run yet.</p><div className="pi-report-skeleton"><i /><i /><i /></div></>
-                )}
+          <div className="pi-workspace pi-report-workspace">
+            <div className="pi-section-heading pi-report-screen-heading"><span className="pi-eyebrow">LEADERSHIP BRIEFS</span><h1>Turn the evidence into a decision document.</h1><p>The printable brief preserves the source-level evidence instead of hiding it behind a single number.</p></div>
+
+            {compareResult && compareMedian && variancePercent !== null ? (
+              <>
+                <article id="pi-leadership-report" className="pi-report-document">
+                  <header className="pi-report-header">
+                    <div>
+                      <span className="pi-report-kicker">SELF-PAY PRICING ANALYSIS</span>
+                      <h1>Provider Pricing Comparison</h1>
+                      <p>{compareProcedure.name} · {compareProcedure.codeSystem} {compareProcedure.code}</p>
+                    </div>
+                    <div className="pi-report-brand"><b>PRICE<br />INTELLIGENCE</b><small>Market Benchmark Brief</small></div>
+                  </header>
+
+                  <section className="pi-report-executive">
+                    <span>EXECUTIVE FINDING</span>
+                    <h2>{quoteAssessment}</h2>
+                    <p>{reportFinding}</p>
+                  </section>
+
+                  <section className="pi-report-grid">
+                    <div><span>Provider quote</span><strong>{money(quote)}</strong></div>
+                    <div><span>Self-pay median</span><strong>{money(compareMedian)}</strong></div>
+                    <div><span>Dollar variance</span><strong>{reportVarianceDollars !== null ? `${reportVarianceDollars >= 0 ? '+' : '−'}${money(Math.abs(reportVarianceDollars))}` : '—'}</strong></div>
+                    <div><span>Percent variance</span><strong>{variancePercent >= 0 ? '+' : ''}{variancePercent.toFixed(1)}%</strong></div>
+                  </section>
+
+                  <section className="pi-report-context">
+                    <div><span>Market</span><b>{reportMarket}</b></div>
+                    <div><span>Radius</span><b>{reportRadius} miles</b></div>
+                    <div><span>Eligible observations</span><b>{compareResult.combined.count}</b></div>
+                    <div><span>Benchmark sources</span><b>{reportSources.filter((source) => source.summary.median !== null).length}</b></div>
+                  </section>
+
+                  <section className="pi-report-section">
+                    <div className="pi-report-section-title"><span>01</span><div><h3>Source-by-source evidence</h3><p>Sources remain analytically separate; one high-volume source cannot dominate the headline median.</p></div></div>
+                    <div className="pi-report-table-wrap">
+                      <table className="pi-report-table">
+                        <thead><tr><th>Source</th><th>Median</th><th>Low</th><th>High</th><th>Records / basis</th><th>Scope</th></tr></thead>
+                        <tbody>
+                          {reportSources.map((source) => (
+                            <tr key={source.sourceId}>
+                              <td><strong>{source.sourceName}</strong>{source.dataRefreshed && <small>Refreshed {formatDate(source.dataRefreshed)}</small>}</td>
+                              <td>{money(source.summary.median)}</td>
+                              <td>{money(source.summary.low)}</td>
+                              <td>{money(source.summary.high)}</td>
+                              <td>{source.summary.count || source.observations.length}</td>
+                              <td>{source.sourceScope || 'Local cash observations'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <section className="pi-report-section pi-report-methodology">
+                    <div className="pi-report-section-title"><span>02</span><div><h3>Methodology</h3><p>Designed to answer a narrow question: what does this procedure cost when paid directly without insurance?</p></div></div>
+                    <div className="pi-report-method-grid">
+                      <div><b>Included</b><p>Explicit cash, self-pay, discounted-cash, uninsured direct-pay, or marketplace-cash prices.</p></div>
+                      <div><b>Excluded</b><p>Medicare, Medicaid, commercial negotiated rates, insurer allowed amounts, claims averages, gross charges, chargemaster values, and unknown payment bases.</p></div>
+                      <div><b>Headline median</b><p>Median of each eligible live source's median. This prevents a source with thousands of rows from overpowering a smaller independent source.</p></div>
+                      <div><b>Geography</b><p>Local source observations must pass the requested geographic rule. State or national fallbacks are not silently represented as local results.</p></div>
+                    </div>
+                  </section>
+
+                  {(reportSources.some((source) => source.attribution || source.disclaimer)) && (
+                    <section className="pi-report-section pi-report-notes">
+                      <div className="pi-report-section-title"><span>03</span><div><h3>Source notes</h3><p>Required attribution and source-specific limitations.</p></div></div>
+                      {reportSources.filter((source) => source.attribution || source.disclaimer).map((source) => (
+                        <div className="pi-report-source-note" key={source.sourceId}>
+                          <b>{source.sourceName}</b>
+                          {source.attribution && <p>{source.attribution}</p>}
+                          {source.disclaimer && <p>{source.disclaimer}</p>}
+                        </div>
+                      ))}
+                    </section>
+                  )}
+
+                  <footer className="pi-report-footer">
+                    <span>Price Intelligence · Self-Pay Market Benchmark</span>
+                    <span>Generated {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}</span>
+                  </footer>
+                </article>
+
+                <div className="pi-report-actions pi-report-screen-actions">
+                  <button className="pi-secondary" type="button" onClick={() => setSection('compare')}>Update quote analysis</button>
+                  <button className="pi-primary" type="button" onClick={() => window.print()}>Print / Save PDF</button>
+                </div>
+              </>
+            ) : (
+              <div className="pi-report-preview glass-panel">
+                <div className="pi-report-paper"><span>SELF-PAY PRICING ANALYSIS</span><h2>Provider Pricing Comparison</h2><div className="pi-report-rule" /><p>No comparison has been run yet.</p><div className="pi-report-skeleton"><i /><i /><i /></div></div>
+                <div className="pi-report-actions"><button className="pi-secondary" type="button" onClick={() => setSection('compare')}>Create from quote analysis</button></div>
               </div>
-              <div className="pi-report-actions"><button className="pi-secondary" type="button" onClick={() => setSection('compare')}>{compareResult ? 'Update quote analysis' : 'Create from quote analysis'}</button></div>
-            </div>
+            )}
           </div>
         )}
 
