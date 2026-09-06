@@ -23,12 +23,12 @@ services:
       - key: TURQUOISE_CLIENT_SECRET
         sync: false
 
-      # Other active public price sources require no Render secret:
+      # Other active public price sources require no Render secret. These include
       # Hospital Ledger, PriceTransparency.io, MarketCare, Expected Health,
-      # TestWell, LabTestInsight and Real Dental Costs. Public-page sources such
-      # as Solv ClearPrice, RadiologyAssist, DENTALPRICE, DirectMedicine,
-      # MDsave, Sesame and SumHealth are registered with explicit provenance and
-      # are only admitted when a deterministic cash/self-pay observation exists.
+      # RadiologyAssist, TestWell, LabTestInsight and Real Dental Costs, plus the
+      # existing open MedRates/MedCompare/FairVisit/Loa adapters. Registered
+      # sources contribute zero unless a deterministic eligible cash observation
+      # is available; MDsave/Tendo remains credential-required.
 
       # Advisory evidence ranking only. These server-side keys never affect price math.
       # Secondary keys are used only as failover for auth/rate-limit failures.
