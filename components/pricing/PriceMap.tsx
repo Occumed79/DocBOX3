@@ -22,6 +22,7 @@ type MapObservation = {
 type PriceMapProps = {
   procedure: ProcedureDefinition;
   observations?: MapObservation[];
+  metric?: 'index' | 'cash';
 };
 
 declare global {
@@ -58,11 +59,29 @@ function ensureMapTilerScript(): Promise<any> {
   });
 }
 
-export default function PriceMap({ procedure, observations = [] }: PriceMapProps) {
+function money(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+}
+
+function safeText(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+  }[character] || character));
+}
+
+export default function PriceMap({ procedure, observations = [], metric = 'index' }: PriceMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+
+  const priceBounds = useMemo(() => {
+    const prices = observations.map((observation) => observation.price).filter((value) => Number.isFinite(value) && value > 0);
+    if (!prices.length) return { low: 0, high: 1 };
+    const low = Math.min(...prices);
+    const high = Math.max(...prices);
+    return { low, high: high === low ? low + 1 : high };
+  }, [observations]);
 
   const geoJson = useMemo(() => ({
     type: 'FeatureCollection',
@@ -107,18 +126,28 @@ export default function PriceMap({ procedure, observations = [] }: PriceMapProps
         map.on('load', () => {
           if (!geoJson.features.length) return;
           map.addSource('self-pay-prices', { type: 'geojson', data: geoJson });
+
+          const heatWeight = metric === 'cash'
+            ? [
+              'interpolate', ['linear'], ['get', 'price'],
+              priceBounds.low, 0.1,
+              priceBounds.low + (priceBounds.high - priceBounds.low) * 0.5, 0.5,
+              priceBounds.high, 1,
+            ]
+            : [
+              'interpolate', ['linear'], ['get', 'priceIndex'],
+              60, 0.1,
+              100, 0.45,
+              160, 1,
+            ];
+
           map.addLayer({
             id: 'self-pay-price-heat',
             type: 'heatmap',
             source: 'self-pay-prices',
             maxzoom: 10,
             paint: {
-              'heatmap-weight': [
-                'interpolate', ['linear'], ['get', 'priceIndex'],
-                60, 0.1,
-                100, 0.45,
-                160, 1,
-              ],
+              'heatmap-weight': heatWeight,
               'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 9, 2.2],
               'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 2, 16, 9, 38],
               'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.78, 10, 0.25],
@@ -128,14 +157,41 @@ export default function PriceMap({ procedure, observations = [] }: PriceMapProps
             id: 'self-pay-price-points',
             type: 'circle',
             source: 'self-pay-prices',
-            minzoom: 8,
+            minzoom: 7.5,
             paint: {
               'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 13, 9],
-              'circle-color': '#ffffff',
+              'circle-color': [
+                'interpolate', ['linear'], ['get', 'priceIndex'],
+                70, '#d7eef0',
+                100, '#ffffff',
+                140, '#e3d8f1',
+              ],
               'circle-stroke-color': '#315d8f',
               'circle-stroke-width': 2,
-              'circle-opacity': 0.88,
+              'circle-opacity': 0.92,
             },
+          });
+
+          map.on('mouseenter', 'self-pay-price-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', 'self-pay-price-points', () => { map.getCanvas().style.cursor = ''; });
+          map.on('click', 'self-pay-price-points', (event: any) => {
+            const feature = event.features?.[0];
+            if (!feature) return;
+            const properties = feature.properties || {};
+            const coordinates = feature.geometry?.coordinates?.slice?.() || [event.lngLat.lng, event.lngLat.lat];
+            const location = [properties.city, properties.state].filter(Boolean).join(', ');
+            const html = `
+              <div class="pi-map-popup">
+                <span>SELF-PAY PRICE</span>
+                <strong>${money(Number(properties.price) || 0)}</strong>
+                ${properties.provider ? `<b>${safeText(properties.provider)}</b>` : ''}
+                ${location ? `<small>${safeText(location)}</small>` : ''}
+                <em>${safeText(properties.source || '')}</em>
+              </div>`;
+            new maptilersdk.Popup({ closeButton: true, offset: 12 })
+              .setLngLat(coordinates)
+              .setHTML(html)
+              .addTo(map);
           });
         });
       })
@@ -148,14 +204,17 @@ export default function PriceMap({ procedure, observations = [] }: PriceMapProps
       mapRef.current?.remove?.();
       mapRef.current = null;
     };
-  }, [apiKey, geoJson]);
+  }, [apiKey, geoJson, metric, priceBounds.high, priceBounds.low]);
+
+  const legendLow = metric === 'cash' ? money(priceBounds.low) : 'LOWER';
+  const legendHigh = metric === 'cash' ? money(priceBounds.high) : 'HIGHER';
 
   return (
     <div className="pi-map-stage">
       <div className="pi-map-meta glass-panel">
         <span className="pi-eyebrow">PRICE HEAT MAP</span>
         <strong>{procedure.name}</strong>
-        <span>{procedure.codeSystem} {procedure.code}</span>
+        <span>{procedure.codeSystem} {procedure.code} · {metric === 'cash' ? 'Cash price' : 'Relative price index'}</span>
       </div>
 
       {!apiKey ? (
@@ -166,14 +225,16 @@ export default function PriceMap({ procedure, observations = [] }: PriceMapProps
         </div>
       ) : mapError ? (
         <div className="pi-map-empty"><strong>{mapError}</strong></div>
+      ) : !observations.length ? (
+        <div className="pi-map-empty"><strong>No mappable self-pay observations for this procedure yet.</strong><p>The map never substitutes Medicare, insurance, or unverified prices just to fill geography.</p></div>
       ) : (
         <div ref={containerRef} className="pi-map-canvas" aria-label={`Self-pay price heat map for ${procedure.name}`} />
       )}
 
-      <div className="pi-map-legend glass-panel" aria-label="Price index legend">
-        <span>LOWER</span>
+      <div className="pi-map-legend glass-panel" aria-label={metric === 'cash' ? 'Cash price legend' : 'Price index legend'}>
+        <span>{legendLow}</span>
         <div className="pi-legend-ramp" />
-        <span>HIGHER</span>
+        <span>{legendHigh}</span>
       </div>
     </div>
   );
