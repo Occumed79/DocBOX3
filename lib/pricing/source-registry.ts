@@ -75,6 +75,16 @@ export const PRICING_SOURCES: PricingSource[] = [
     status: 'approved',
   },
   {
+    id: 'fairvisit-health',
+    name: 'FairVisitHealth',
+    category: 'cash-data',
+    description: 'Hospital-published discounted cash prices. Local area statistics are eligible only when the API reports a genuinely local scope; Medicare context and state/national fallbacks are discarded.',
+    coverage: 'National hospital cash-price API with local ZIP/coordinate lookup.',
+    eligibleLabels: ['discounted cash price', 'hospital-published self-pay'],
+    excludedLabels: ['Medicare rate', 'negotiated rates', 'national composite', 'state fallback for local benchmark'],
+    status: 'approved',
+  },
+  {
     id: 'medcompare',
     name: 'MedCompare',
     category: 'cash-data',
