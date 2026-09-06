@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PROCEDURES } from '@/lib/pricing/procedures';
+import { procedureFromCode } from '@/lib/pricing/procedures';
 import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
 import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
@@ -161,9 +161,11 @@ export async function GET(request: NextRequest) {
 
   if (!code) return NextResponse.json({ error: 'A procedure code is required.' }, { status: 400 });
 
-  const procedure = PROCEDURES.find((item) => item.code.toLowerCase() === code.toLowerCase());
+  const procedure = procedureFromCode(code);
   if (!procedure) {
-    return NextResponse.json({ error: `Procedure ${code} is not in the current catalog.` }, { status: 404 });
+    return NextResponse.json({
+      error: `“${code}” is not a recognized CPT, CDT, or HCPCS code format. Enter a 5-digit CPT code, a D-prefixed CDT code, or a letter-plus-four-digits HCPCS code.`,
+    }, { status: 400 });
   }
 
   const resolvedLocation = location ? await geocodeUsLocation(location) : null;
@@ -203,13 +205,10 @@ export async function GET(request: NextRequest) {
     runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
   ]);
 
-  // An adapter existing in code is not the same thing as a live feed. Do not send
-  // unconfigured licensed feeds to the client as if they had been queried.
   const sourceResults = allSourceResults.filter((source) => source.status !== 'unconfigured');
   const allEligibleObservations = sourceResults.flatMap((source) => source.observations);
   const pooled = summarizePrices(allEligibleObservations.map((item) => item.price));
 
-  // Each source gets one vote in the headline median regardless of its row count.
   const sourceMedians = sourceResults
     .map((source) => source.summary.median)
     .filter((value): value is number => value !== null && Number.isFinite(value));
