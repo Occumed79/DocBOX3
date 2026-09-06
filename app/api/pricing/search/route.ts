@@ -3,6 +3,7 @@ import { procedureFromCode } from '@/lib/pricing/procedures';
 import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
 import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
+import { searchOpenDocCash } from '@/lib/pricing/adapters/opendoc';
 import {
   PRIORITY_FEED_STATUS,
   searchClearHealthCostsCash,
@@ -200,6 +201,11 @@ export async function GET(request: NextRequest) {
       location: sourceLocation,
     }), resolvedLocation, radiusMiles),
     runFairVisitSource(procedure.code, procedure.name, resolvedLocation, radiusMiles),
+    runSource('opendoc', 'OpenDoc', () => searchOpenDocCash({
+      procedureCode: procedure.code,
+      procedureName: procedure.name,
+      state: resolvedLocation?.state,
+    }), resolvedLocation, radiusMiles),
     runSource('clear-health-costs', 'ClearHealthCosts', () => searchClearHealthCostsCash(licensedSearch), resolvedLocation, radiusMiles, configured['clear-health-costs']),
     runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(licensedSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
     runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
@@ -231,6 +237,7 @@ export async function GET(request: NextRequest) {
         turquoise: 'Consumer Pricing composite estimates, negotiated rates, claims-derived values, and Medicare reference signals are not eligible. Only raw provider-published cash/discounted-cash fields are accepted.',
         clearHealthCosts: 'Only explicit cash/self-pay observations from the permitted API/feed are accepted.',
         fairVisitHealth: 'Only hospital-published discounted cash values are eligible. Medicare fields, national composite context, and state fallback medians are ignored.',
+        openDoc: 'Only explicit provider x service posted cash offers are accepted. Typical estimates, Sure Price context, and non-offer values are ignored.',
       },
     },
     sources: sourceResults,
