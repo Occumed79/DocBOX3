@@ -39,11 +39,21 @@ type SourceResult = {
   error?: string;
   observations: ApiObservation[];
   summary: PriceSummary;
+  excludedByRadius?: number;
+  excludedWithoutCoordinates?: number;
 };
 
 type PricingSearchResponse = {
   procedure: ProcedureDefinition;
   location: string | null;
+  radiusMiles?: number | null;
+  resolvedLocation?: {
+    displayName: string;
+    latitude: number;
+    longitude: number;
+    state?: string;
+    postalCode?: string;
+  } | null;
   sources: SourceResult[];
   combined: PriceSummary;
 };
@@ -56,6 +66,8 @@ const NAV: Array<{ id: Section; label: string }> = [
   { id: 'reports', label: 'Reports' },
   { id: 'sources', label: 'Sources' },
 ];
+
+const RADII = [25, 50, 75, 100];
 
 function money(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -107,6 +119,17 @@ function ProcedurePicker({ value, onChange }: { value: ProcedureDefinition; onCh
   );
 }
 
+function RadiusField({ value, onChange }: { value: number; onChange: (radius: number) => void }) {
+  return (
+    <label className="pi-field">
+      <span>Radius</span>
+      <select value={value} onChange={(event) => onChange(Number(event.target.value))}>
+        {RADII.map((radius) => <option key={radius} value={radius}>{radius} miles</option>)}
+      </select>
+    </label>
+  );
+}
+
 function SourceBadges() {
   return (
     <div className="pi-source-row">
@@ -116,9 +139,10 @@ function SourceBadges() {
   );
 }
 
-async function fetchPricing(procedure: ProcedureDefinition, location?: string): Promise<PricingSearchResponse> {
+async function fetchPricing(procedure: ProcedureDefinition, location?: string, radius?: number): Promise<PricingSearchResponse> {
   const params = new URLSearchParams({ code: procedure.code });
   if (location?.trim()) params.set('location', location.trim());
+  if (location?.trim() && radius) params.set('radius', String(radius));
   const response = await fetch(`/api/pricing/search?${params.toString()}`, { cache: 'no-store' });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload?.error || 'Price search failed.');
@@ -131,6 +155,7 @@ export default function PriceIntelligenceApp() {
   const [mapProcedure, setMapProcedure] = useState(PROCEDURES[4]);
   const [compareProcedure, setCompareProcedure] = useState(PROCEDURES[4]);
   const [location, setLocation] = useState('');
+  const [radius, setRadius] = useState(50);
   const [quotePrice, setQuotePrice] = useState('');
 
   const [lookupResult, setLookupResult] = useState<PricingSearchResponse | null>(null);
@@ -191,7 +216,7 @@ export default function PriceIntelligenceApp() {
     setLookupLoading(true);
     setLookupError(null);
     try {
-      setLookupResult(await fetchPricing(lookupProcedure, location));
+      setLookupResult(await fetchPricing(lookupProcedure, location, radius));
     } catch (error) {
       setLookupResult(null);
       setLookupError(error instanceof Error ? error.message : 'Price lookup failed.');
@@ -208,7 +233,7 @@ export default function PriceIntelligenceApp() {
     setCompareLoading(true);
     setCompareError(null);
     try {
-      setCompareResult(await fetchPricing(compareProcedure, location));
+      setCompareResult(await fetchPricing(compareProcedure, location, radius));
     } catch (error) {
       setCompareResult(null);
       setCompareError(error instanceof Error ? error.message : 'Quote analysis failed.');
@@ -275,33 +300,47 @@ export default function PriceIntelligenceApp() {
             <div className="pi-query-card glass-panel">
               <ProcedurePicker value={lookupProcedure} onChange={setLookupProcedure} />
               <label className="pi-field"><span>Location</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, state or ZIP" /></label>
-              <label className="pi-field"><span>Radius</span><select defaultValue="50"><option>25 miles</option><option value="50">50 miles</option><option>75 miles</option><option>100 miles</option></select></label>
+              <RadiusField value={radius} onChange={setRadius} />
               <button className="pi-primary" type="button" onClick={runLookup} disabled={lookupLoading}>{lookupLoading ? 'Searching…' : 'Search self-pay market'}</button>
             </div>
 
             {lookupError && <div className="pi-error-panel glass-panel">{lookupError}</div>}
             {lookupResult && (
-              <div className="pi-market-summary glass-panel">
-                <div><span>ELIGIBLE OBSERVATIONS</span><strong>{lookupResult.combined.count}</strong></div>
-                <div><span>OBSERVED LOW</span><strong>{money(lookupResult.combined.low)}</strong></div>
-                <div className="focus"><span>MEDIAN SELF-PAY</span><strong>{money(lookupResult.combined.median)}</strong></div>
-                <div><span>OBSERVED HIGH</span><strong>{money(lookupResult.combined.high)}</strong></div>
-              </div>
+              <>
+                {lookupResult.resolvedLocation && (
+                  <div className="pi-location-resolution">
+                    <span>Resolved market</span>
+                    <strong>{lookupResult.resolvedLocation.displayName}</strong>
+                    <b>{lookupResult.radiusMiles || radius} mi radius</b>
+                  </div>
+                )}
+                <div className="pi-market-summary glass-panel">
+                  <div><span>ELIGIBLE OBSERVATIONS</span><strong>{lookupResult.combined.count}</strong></div>
+                  <div><span>OBSERVED LOW</span><strong>{money(lookupResult.combined.low)}</strong></div>
+                  <div className="focus"><span>SOURCE-BALANCED MEDIAN</span><strong>{money(lookupResult.combined.median)}</strong></div>
+                  <div><span>OBSERVED HIGH</span><strong>{money(lookupResult.combined.high)}</strong></div>
+                </div>
+              </>
             )}
 
             <div className="pi-source-results">
               {PRICING_SOURCES.slice(0, 7).map((source) => {
                 const live = lookupResult?.sources.find((item) => item.sourceId === source.id);
+                const excluded = (live?.excludedByRadius || 0) + (live?.excludedWithoutCoordinates || 0);
                 return (
                   <article className="pi-source-result glass-panel" key={source.id}>
                     <div><span className="pi-source-status">{live ? 'LIVE' : source.status === 'approved' ? 'CORE' : 'ELIGIBLE'}</span><h3>{source.name}</h3></div>
                     <p>{source.description}</p>
                     {live?.status === 'ok' ? (
-                      <div className="pi-live-value"><strong>{money(live.summary.median)}</strong><span>median · {live.summary.count} records</span><small>{money(live.summary.low)} – {money(live.summary.high)}</small></div>
+                      <div className="pi-live-value">
+                        <strong>{money(live.summary.median)}</strong>
+                        <span>median · {live.summary.count} verified local records</span>
+                        <small>{money(live.summary.low)} – {money(live.summary.high)}{excluded ? ` · ${excluded} excluded by geography` : ''}</small>
+                      </div>
                     ) : live?.status === 'error' ? (
                       <div className="pi-empty-value">Source error: {live.error}</div>
                     ) : live?.status === 'empty' ? (
-                      <div className="pi-empty-value">No explicit cash/self-pay records returned.</div>
+                      <div className="pi-empty-value">No explicit cash/self-pay records passed the geographic filter.</div>
                     ) : (
                       <div className="pi-empty-value">Adapter pending</div>
                     )}
@@ -330,11 +369,12 @@ export default function PriceIntelligenceApp() {
             <div className="pi-section-heading">
               <span className="pi-eyebrow">QUOTE ANALYZER</span>
               <h1>Is this provider fee actually high?</h1>
-              <p>Enter a quoted cash fee. The comparison engine benchmarks it only against qualifying self-pay observations for the selected market.</p>
+              <p>Enter a quoted cash fee. The comparison engine benchmarks it only against qualifying self-pay observations inside the selected market radius.</p>
             </div>
             <div className="pi-compare-card glass-panel">
               <ProcedurePicker value={compareProcedure} onChange={setCompareProcedure} />
               <label className="pi-field"><span>Provider location</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, state or ZIP" /></label>
+              <RadiusField value={radius} onChange={setRadius} />
               <label className="pi-field"><span>Quoted price</span><div className="pi-money-input"><b>$</b><input inputMode="decimal" value={quotePrice} onChange={(event) => setQuotePrice(event.target.value)} placeholder="0.00" /></div></label>
               <button className="pi-primary wide" type="button" onClick={runCompare} disabled={compareLoading}>{compareLoading ? 'Analyzing…' : 'Analyze quote'}</button>
               <div className="pi-integrity-note"><i /> Medicare, Medicaid, insurance-negotiated rates, claims averages, gross charges, and unknown payment bases are excluded.</div>
@@ -347,7 +387,11 @@ export default function PriceIntelligenceApp() {
                   <div><span>SELF-PAY MEDIAN</span><strong>{money(compareMedian)}</strong></div>
                   <div><span>VARIANCE</span><strong className={variancePercent > 10 ? 'elevated' : ''}>{variancePercent >= 0 ? '+' : ''}{variancePercent.toFixed(1)}%</strong></div>
                 </div>
-                <div className="pi-assessment"><span>MARKET INTERPRETATION</span><h2>{quoteAssessment}</h2><p>Based on {compareResult.combined.count} explicit self-pay observations returned by currently connected sources. Source-specific results remain visible in the lookup workflow and will be preserved in the leadership report.</p></div>
+                <div className="pi-assessment">
+                  <span>MARKET INTERPRETATION</span>
+                  <h2>{quoteAssessment}</h2>
+                  <p>Based on {compareResult.combined.count} explicit self-pay observations within {compareResult.radiusMiles || radius} miles of {compareResult.resolvedLocation?.displayName || location || 'the selected market'}. Source-specific results remain separate and will be preserved in the leadership report.</p>
+                </div>
               </div>
             )}
           </div>
