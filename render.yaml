@@ -46,6 +46,21 @@ services:
       - key: FAIR_HEALTH_CASH_FEED_METHOD
         value: GET
 
+      # Advisory evidence ranking only. These server-side keys never affect price math.
+      # Secondary keys are used only as failover for auth/rate-limit failures.
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY_2
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: COHERE_API_KEY_2
+        sync: false
+      - key: COHERE_API_KEY_3
+        sync: false
+      - key: COHERE_API_KEY_4
+        sync: false
+
       - key: S3_BUCKET
         sync: false
       - key: S3_ENDPOINT
