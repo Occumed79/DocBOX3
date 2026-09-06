@@ -3,16 +3,20 @@ export type ResolvedLocation = {
   displayName: string;
   latitude: number;
   longitude: number;
+  city?: string;
   state?: string;
   postalCode?: string;
 };
 
+type MapTilerContext = { id?: string; text?: string; short_code?: string };
+
 type MapTilerFeature = {
+  id?: string;
   place_name?: string;
   text?: string;
   center?: [number, number];
   geometry?: { coordinates?: [number, number] };
-  context?: Array<{ id?: string; text?: string; short_code?: string }>;
+  context?: MapTilerContext[];
   properties?: Record<string, unknown>;
 };
 
@@ -28,7 +32,19 @@ function stateFromFeature(feature: MapTilerFeature) {
   return code && code.length === 2 ? code : region.text;
 }
 
+function cityFromFeature(feature: MapTilerFeature) {
+  if (feature.id?.startsWith('place.') || feature.id?.startsWith('locality.') || feature.id?.startsWith('municipality.')) {
+    return feature.text;
+  }
+  const contexts = feature.context || [];
+  const place = contexts.find((item) =>
+    item.id?.startsWith('place.') || item.id?.startsWith('locality.') || item.id?.startsWith('municipality.'),
+  );
+  return place?.text;
+}
+
 function postalFromFeature(feature: MapTilerFeature) {
+  if (feature.id?.startsWith('postal_code.') || feature.id?.startsWith('postcode.')) return feature.text;
   const contexts = feature.context || [];
   const postal = contexts.find((item) => item.id?.startsWith('postal_code.') || item.id?.startsWith('postcode.'));
   return postal?.text;
@@ -63,6 +79,7 @@ export async function geocodeUsLocation(query?: string | null): Promise<Resolved
       displayName: feature.place_name || feature.text || trimmed,
       latitude,
       longitude,
+      city: cityFromFeature(feature),
       state: stateFromFeature(feature),
       postalCode: postalFromFeature(feature),
     };
