@@ -12,6 +12,7 @@ on:
       - 'lib/pricing/source-registry.ts'
       - 'app/api/pricing/search/route.ts'
       - 'package.json'
+      - 'package-lock.json'
 
 permissions:
   contents: read
@@ -30,8 +31,8 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
+      - name: Install dependencies from lockfile
+        run: npm ci --legacy-peer-deps
 
       - name: Verify pricing integrity
         run: npm run verify:pricing
