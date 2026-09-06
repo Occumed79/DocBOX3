@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PROCEDURES } from '@/lib/pricing/procedures';
 import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
+import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
 import {
   PRIORITY_FEED_STATUS,
   searchClearHealthCostsCash,
@@ -25,6 +26,10 @@ type SourceResult = {
   summary: ReturnType<typeof summarizePrices>;
   excludedByRadius: number;
   excludedWithoutCoordinates: number;
+  attribution?: string;
+  disclaimer?: string;
+  sourceScope?: string;
+  dataRefreshed?: string;
 };
 
 function emptySource(sourceId: string, sourceName: string, status: SourceStatus, error?: string): SourceResult {
@@ -106,6 +111,46 @@ async function runSource(
   }
 }
 
+async function runFairVisitSource(
+  procedureCode: string,
+  procedureName: string,
+  resolvedLocation: ResolvedLocation | null,
+  radiusMiles: number | null,
+): Promise<SourceResult> {
+  if (!resolvedLocation || !radiusMiles) return emptySource('fairvisit-health', 'FairVisitHealth', 'empty');
+  try {
+    const result = await searchFairVisitCash({
+      procedureCode,
+      procedureName,
+      postalCode: resolvedLocation.postalCode,
+      latitude: resolvedLocation.latitude,
+      longitude: resolvedLocation.longitude,
+      radiusMiles,
+    });
+    const hasUsefulData = result.summary.median !== null || result.observations.length > 0;
+    return {
+      sourceId: 'fairvisit-health',
+      sourceName: 'FairVisitHealth',
+      status: hasUsefulData ? 'ok' : 'empty',
+      observations: result.observations,
+      summary: result.summary,
+      excludedByRadius: 0,
+      excludedWithoutCoordinates: 0,
+      attribution: result.attribution,
+      disclaimer: result.disclaimer,
+      sourceScope: result.sourceScope,
+      dataRefreshed: result.dataRefreshed,
+    };
+  } catch (error) {
+    return emptySource(
+      'fairvisit-health',
+      'FairVisitHealth',
+      'error',
+      error instanceof Error ? error.message : 'FairVisitHealth search failed.',
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')?.trim();
   const location = request.nextUrl.searchParams.get('location')?.trim() || undefined;
@@ -152,6 +197,7 @@ export async function GET(request: NextRequest) {
       procedureName: procedure.name,
       location: sourceLocation,
     }), resolvedLocation, radiusMiles),
+    runFairVisitSource(procedure.code, procedure.name, resolvedLocation, radiusMiles),
     runSource('clear-health-costs', 'ClearHealthCosts', () => searchClearHealthCostsCash(licensedSearch), resolvedLocation, radiusMiles, configured['clear-health-costs']),
     runSource('turquoise-health', 'Turquoise Health', () => searchTurquoiseRawCash(licensedSearch), resolvedLocation, radiusMiles, configured['turquoise-health']),
     runSource('fair-health', 'FAIR Health', () => searchFairHealthCash(licensedSearch), resolvedLocation, radiusMiles, configured['fair-health']),
@@ -176,12 +222,13 @@ export async function GET(request: NextRequest) {
       excluded: ['Medicare', 'Medicaid', 'commercial negotiated', 'insurance allowed', 'claims average', 'gross charge', 'chargemaster', 'unknown'],
       combinationMethod: 'Sources remain separate. Headline median is the median of live source medians; low/high and count reflect pooled eligible cash observations.',
       geographicMethod: resolvedLocation && radiusMiles
-        ? `Only observations with verifiable coordinates within ${radiusMiles} miles of the resolved search location are included.`
+        ? `Only observations verified inside the requested market are included; source-level state/national fallbacks are not allowed into the local headline benchmark.`
         : 'No radius filter was applied.',
       sourceGuardrails: {
         fairHealth: 'Out-of-network/uninsured full-charge benchmarks and claims-derived amounts are not eligible. Only an explicitly licensed cash/self-pay field is accepted.',
         turquoise: 'Consumer Pricing composite estimates, negotiated rates, claims-derived values, and Medicare reference signals are not eligible. Only raw provider-published cash/discounted-cash fields are accepted.',
         clearHealthCosts: 'Only explicit cash/self-pay observations from the permitted API/feed are accepted.',
+        fairVisitHealth: 'Only hospital-published discounted cash values are eligible. Medicare fields, national composite context, and state fallback medians are ignored.',
       },
     },
     sources: sourceResults,
