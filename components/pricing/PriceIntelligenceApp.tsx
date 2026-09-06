@@ -213,7 +213,7 @@ function FamilyStrip({ result }: { result: PricingSearchResponse }) {
     <div className="pi-family-strip">
       <div className="pi-family-strip-heading">
         <span>INDEPENDENT EVIDENCE FAMILIES</span>
-        <b>{families.length} family{families.length === 1 ? '' : 'ies'} voting in headline benchmark</b>
+        <b>{families.length} {families.length === 1 ? 'family' : 'families'} voting in headline benchmark</b>
       </div>
       <div className="pi-family-grid">
         {families.map((item) => (

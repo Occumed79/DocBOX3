@@ -21,16 +21,16 @@ import './styles/price-results.css';
 import './styles/price-report.css';
 
 export const metadata: Metadata = {
-  title: 'Price Intelligence | Occu-Med',
-  description: 'Self-pay healthcare price intelligence, geographic market exploration, quote comparison, and evidence-based pricing reports.',
+  title: 'DocBox | Occu-Med',
+  description: 'Occu-Med DocBox — a luminous visual workspace for storing, previewing, organizing, and securely sharing documents.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#e9f1f8',
-  colorScheme: 'light',
+  themeColor: '#415881',
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -63,6 +63,7 @@ function cashBasis(object: JsonObject): EligiblePaymentBasis | null {
 type TraversalContext = {
   entitySlug?: string;
   entityName?: string;
+  procedureCode?: string;
 };
 
 function mergeContext(object: JsonObject, parent: TraversalContext): TraversalContext {
@@ -74,7 +75,7 @@ function mergeContext(object: JsonObject, parent: TraversalContext): TraversalCo
     entitySlug = textFrom(candidate, ['entitySlug', 'entity_slug', 'slug']) || entitySlug;
     entityName = textFrom(candidate, ['canonicalName', 'canonical_name', 'displayName', 'display_name', 'entityName', 'entity_name']) || entityName;
   }
-  return { entitySlug, entityName };
+  return { entitySlug, entityName, procedureCode: parent.procedureCode };
 }
 
 function collectCashRows(
@@ -89,12 +90,13 @@ function collectCashRows(
   }
   const object = asObject(value);
   if (!object) return;
-  const nextContext = mergeContext(object, context);
   const code = textFrom(object, ['cptCode', 'cpt_code', 'procedureCode', 'procedure_code']);
+  const nextContext = { ...mergeContext(object, context), procedureCode: code || context.procedureCode };
   const cents = numberFrom(object.priceCents ?? object.price_cents);
   const basis = cashBasis(object);
+  const effectiveCode = nextContext.procedureCode;
 
-  if (cents !== null && cents > 0 && basis && (!code || code.toUpperCase() === procedureCode.toUpperCase())) {
+  if (cents !== null && cents > 0 && basis && effectiveCode?.toUpperCase() === procedureCode.toUpperCase()) {
     output.push({ object, context: nextContext, basis, price: cents / 100 });
   }
 

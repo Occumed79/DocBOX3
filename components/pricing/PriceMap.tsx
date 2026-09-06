@@ -45,7 +45,10 @@ function ensureMapTilerScript(): Promise<any> {
   if (existing) {
     return new Promise((resolve, reject) => {
       existing.addEventListener('load', () => resolve(window.maptilersdk), { once: true });
-      existing.addEventListener('error', () => reject(new Error('MapTiler SDK failed to load.')), { once: true });
+      existing.addEventListener('error', () => {
+        existing.remove();
+        reject(new Error('MapTiler SDK failed to load.'));
+      }, { once: true });
     });
   }
 
@@ -54,7 +57,10 @@ function ensureMapTilerScript(): Promise<any> {
     script.src = MAPTILER_SCRIPT;
     script.async = true;
     script.onload = () => resolve(window.maptilersdk);
-    script.onerror = () => reject(new Error('MapTiler SDK failed to load.'));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error('MapTiler SDK failed to load.'));
+    };
     document.head.appendChild(script);
   });
 }

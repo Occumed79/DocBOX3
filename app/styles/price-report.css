@@ -150,7 +150,7 @@
 }
 
 @media print {
-  @page { size: Letter; margin: 0.42in; }
+  @page { size: letter; margin: 0.42in; }
   html, body { background: #fff !important; }
   body::before, body::after,
   .pi-aurora, .pi-noise, .pi-topbar,

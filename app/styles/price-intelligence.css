@@ -40,11 +40,11 @@
   filter: blur(90px);
   opacity: .5;
   pointer-events: none;
-  animation: piDrift 16s ease-in-out infinite alternate;
+  animation: pi-drift 16s ease-in-out infinite alternate;
 }
 .pi-aurora-one { width: 34vw; height: 34vw; top: 8vh; left: -8vw; background: rgba(106,176,227,.44); }
 .pi-aurora-two { width: 31vw; height: 31vw; right: -3vw; bottom: -8vh; background: rgba(181,156,231,.34); animation-delay: -6s; }
-@keyframes piDrift { to { transform: translate3d(4vw, 2vh, 0) scale(1.08); } }
+@keyframes pi-drift { to { transform: translate3d(4vw, 2vh, 0) scale(1.08); } }
 
 .pi-noise {
   position: fixed;

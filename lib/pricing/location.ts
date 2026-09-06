@@ -9,15 +9,18 @@ const STATE_CODES: Record<string, string> = {
 
 const VALID_CODES = new Set(Object.values(STATE_CODES));
 
+const STATE_NAME_ENTRIES = Object.entries(STATE_CODES)
+  .sort((a, b) => b[0].length - a[0].length)
+  .map(([name, code]) => [new RegExp(`\\b${name.replace(/\s+/g, '\\s+')}\\b`, 'i'), code] as const);
+
 export function stateCodeFromLocation(location?: string | null): string | null {
   if (!location) return null;
   const upper = location.toUpperCase();
   const codeMatch = upper.match(/(?:^|[\s,])([A-Z]{2})(?:\s|,|\d|$)/);
   if (codeMatch && VALID_CODES.has(codeMatch[1])) return codeMatch[1];
 
-  const lower = location.toLowerCase();
-  for (const [name, code] of Object.entries(STATE_CODES)) {
-    if (new RegExp(`\\b${name.replace(' ', '\\s+')}\\b`, 'i').test(lower)) return code;
+  for (const [pattern, code] of STATE_NAME_ENTRIES) {
+    if (pattern.test(location)) return code;
   }
   return null;
 }

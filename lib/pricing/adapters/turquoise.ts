@@ -2,6 +2,7 @@ import { acceptSelfPayObservation, type PriceObservationInput } from '@/lib/pric
 
 const API_BASE = 'https://api.turquoise.health';
 const TOKEN_URL = `${API_BASE}/oauth/token`;
+const TURQUOISE_REQUEST_BUDGET_MS = 12_000;
 
 type TurquoiseSearch = {
   procedureCode: string;
@@ -78,7 +79,7 @@ export function isTurquoiseConfigured() {
   return Boolean(credentials());
 }
 
-async function mintToken() {
+async function mintToken(signal: AbortSignal) {
   const configured = credentials();
   if (!configured) throw new Error('Turquoise OAuth credentials are not configured.');
 
@@ -95,6 +96,7 @@ async function mintToken() {
       organization_id: configured.organizationId,
     }),
     cache: 'no-store',
+    signal,
   });
 
   if (!response.ok) {
@@ -114,18 +116,18 @@ async function mintToken() {
   return cachedToken.value;
 }
 
-async function accessToken() {
+async function accessToken(signal: AbortSignal) {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
   if (!inFlightToken) {
-    inFlightToken = mintToken().finally(() => {
+    inFlightToken = mintToken(signal).finally(() => {
       inFlightToken = null;
     });
   }
   return inFlightToken;
 }
 
-async function turquoiseFetch(path: string, init?: RequestInit, retry = true): Promise<Response> {
-  const token = await accessToken();
+async function turquoiseFetch(path: string, signal: AbortSignal, init?: RequestInit, retry = true): Promise<Response> {
+  const token = await accessToken(signal);
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -134,18 +136,19 @@ async function turquoiseFetch(path: string, init?: RequestInit, retry = true): P
       accept: 'application/json',
     },
     cache: 'no-store',
+    signal,
   });
 
   if (response.status === 401 && retry) {
     cachedToken = null;
-    return turquoiseFetch(path, init, false);
+    return turquoiseFetch(path, signal, init, false);
   }
   return response;
 }
 
-async function resolvePackageId(code: string) {
+async function resolvePackageId(code: string, signal: AbortSignal) {
   const params = new URLSearchParams({ anchor_code: code, page_size: '25' });
-  const response = await turquoiseFetch(`/v3/packages?${params.toString()}`);
+  const response = await turquoiseFetch(`/v3/packages?${params.toString()}`, signal);
   if (!response.ok) throw new Error(`Turquoise package lookup failed (${response.status}).`);
 
   const payload = await response.json() as ListEnvelope<PackageItem>;
@@ -205,46 +208,52 @@ function toObservation(item: PriceItem, search: TurquoiseSearch): PriceObservati
 export async function searchTurquoiseCash(search: TurquoiseSearch): Promise<PriceObservationInput[]> {
   if (!isTurquoiseConfigured()) return [];
 
-  const pkg = await resolvePackageId(search.procedureCode);
-  if (!pkg) return [];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TURQUOISE_REQUEST_BUDGET_MS);
+  try {
+    const pkg = await resolvePackageId(search.procedureCode, controller.signal);
+    if (!pkg) return [];
 
-  const location = locationPayload(search);
-  const observations: PriceObservationInput[] = [];
-  let cursor: string | null = null;
+    const location = locationPayload(search);
+    const observations: PriceObservationInput[] = [];
+    let cursor: string | null = null;
 
-  // Cap pagination to keep interactive lookups responsive while still allowing a
-  // substantial local sample. Each page can contain up to 250 records.
-  for (let page = 0; page < 3; page += 1) {
-    const body: Record<string, unknown> = {
-      package_id: pkg.id,
-      pricing: { type: 'cash' },
-      page_size: 250,
-      sort: location ? 'distance' : 'total',
-      sort_direction: 'asc',
-    };
-    if (location) body.location = location;
-    if (cursor) body.cursor = cursor;
+    // Cap pagination to keep interactive lookups responsive while still allowing a
+    // substantial local sample. Every request shares the same overall deadline.
+    for (let page = 0; page < 3; page += 1) {
+      const body: Record<string, unknown> = {
+        package_id: pkg.id,
+        pricing: { type: 'cash' },
+        page_size: 250,
+        sort: location ? 'distance' : 'total',
+        sort_direction: 'asc',
+      };
+      if (location) body.location = location;
+      if (cursor) body.cursor = cursor;
 
-    const response = await turquoiseFetch('/v3/prices/query', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+      const response = await turquoiseFetch('/v3/prices/query', controller.signal, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
 
-    if (!response.ok) {
-      if (response.status === 403) return [];
-      throw new Error(`Turquoise cash-price query failed (${response.status}).`);
+      if (!response.ok) {
+        if (response.status === 403) return [];
+        throw new Error(`Turquoise cash-price query failed (${response.status}).`);
+      }
+
+      const payload = await response.json() as ListEnvelope<PriceItem>;
+      for (const item of payload.items || []) {
+        const observation = toObservation(item, search);
+        if (observation) observations.push(observation);
+      }
+
+      cursor = payload.page?.next_cursor || null;
+      if (!cursor) break;
     }
 
-    const payload = await response.json() as ListEnvelope<PriceItem>;
-    for (const item of payload.items || []) {
-      const observation = toObservation(item, search);
-      if (observation) observations.push(observation);
-    }
-
-    cursor = payload.page?.next_cursor || null;
-    if (!cursor) break;
+    return observations;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return observations;
 }

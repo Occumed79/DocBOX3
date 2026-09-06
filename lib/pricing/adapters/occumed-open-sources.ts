@@ -145,11 +145,19 @@ async function priceTransparency(search: Search): Promise<OpenCashSourceResult> 
 // fields. If the index does not expose local geography we keep it as supporting
 // evidence rather than a local headline vote.
 // ---------------------------------------------------------------------------
+const HOSPITAL_LEDGER_TTL_MS = 6 * 60 * 60 * 1000;
 let hospitalLedgerIndexPromise: Promise<unknown> | null = null;
+let hospitalLedgerFetchedAt = 0;
 function hospitalLedgerIndex() {
+  if (hospitalLedgerIndexPromise && Date.now() - hospitalLedgerFetchedAt >= HOSPITAL_LEDGER_TTL_MS) {
+    hospitalLedgerIndexPromise = null;
+    hospitalLedgerFetchedAt = 0;
+  }
   if (!hospitalLedgerIndexPromise) {
+    hospitalLedgerFetchedAt = Date.now();
     hospitalLedgerIndexPromise = fetchJson('https://www.hospitalledger.com/api/cpt-index').catch((error) => {
       hospitalLedgerIndexPromise = null;
+      hospitalLedgerFetchedAt = 0;
       throw error;
     });
   }
@@ -265,6 +273,19 @@ function findArrays(value: unknown, out: unknown[][], depth = 0) {
   }
 }
 
+function testWellCodeMatches(item: Record<string, unknown>, requestedCode: string) {
+  const fields = [
+    item.code, item.cpt, item.cpt_code, item.cptCode, item.hcpcs, item.hcpcs_code,
+    item.procedure_code, item.procedureCode, item.billing_code, item.billingCode,
+  ];
+  const requested = requestedCode.trim().toUpperCase();
+  return fields.some((value) => {
+    if (typeof value === 'string' || typeof value === 'number') return String(value).trim().toUpperCase() === requested;
+    if (Array.isArray(value)) return value.some((entry) => String(entry).trim().toUpperCase() === requested);
+    return false;
+  });
+}
+
 async function testWell(search: Search): Promise<OpenCashSourceResult> {
   if (!/^\d{5}$/.test(search.procedureCode)) return result('testwell', 'TestWell', [], { sourceScope: 'Direct-pay lab catalog', headlineEligible: false });
   const payload = await fetchJson(`https://www.test-well.com/api/catalog.json?q=${encodeURIComponent(search.procedureCode)}&orderable=true&limit=20`);
@@ -277,8 +298,7 @@ async function testWell(search: Search): Promise<OpenCashSourceResult> {
     for (const raw of list) {
       if (!raw || typeof raw !== 'object') continue;
       const item = raw as Record<string, unknown>;
-      const codeText = JSON.stringify(item).toUpperCase();
-      if (!codeText.includes(search.procedureCode.toUpperCase())) continue;
+      if (!testWellCodeMatches(item, search.procedureCode)) continue;
       const price = num(item.price ?? item.price_usd ?? item.cash_price ?? item.amount);
       if (!price) continue;
       const name = String(item.name ?? item.title ?? item.slug ?? 'TestWell direct-pay lab');
@@ -441,7 +461,8 @@ async function expectedHealth(search: Search): Promise<OpenCashSourceResult> {
   if (lines.length < 2) return result('expected-health', 'Expected Health', [], { sourceScope: 'Clinic-published imaging cash index', headlineEligible: false });
   const headers = parseCsvLine(lines[0]).map(norm);
   const metroIndex = headers.findIndex((h) => h.includes('metro'));
-  const modalityIndex = headers.findIndex((h) => h.includes(modality) && (h.includes('median') || h === modality));
+  const modalityToken = norm(modality);
+  const modalityIndex = headers.findIndex((h) => h.includes(modalityToken) && (h.includes('median') || h === modalityToken));
   if (metroIndex < 0 || modalityIndex < 0) return result('expected-health', 'Expected Health', [], { sourceScope: 'Clinic-published imaging cash index', headlineEligible: false });
 
   const city = norm(search.city);

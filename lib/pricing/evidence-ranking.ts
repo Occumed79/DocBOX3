@@ -55,6 +55,7 @@ const COHERE_URL = 'https://api.cohere.com/v2/rerank';
 const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
 const COHERE_MODEL = 'rerank-v4.0-fast';
 const CEREBRAS_MODEL = 'gpt-oss-120b';
+const AI_RANKING_BUDGET_MS = 8_000;
 
 function clamp(value: number) {
   return Math.max(0, Math.min(1, value));
@@ -168,23 +169,34 @@ function documentFor(facts: EvidenceFacts) {
   });
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+async function fetchJsonWithTimeout<T>(url: string, init: RequestInit, timeoutMs: number) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' });
+    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' });
+    const payload = response.ok ? await response.json() as T : null;
+    return { response, payload };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function cohereScores(facts: EvidenceFacts[], context: RankingContext): Promise<Map<string, number> | null> {
+function remainingTimeout(deadline: number, capMs: number) {
+  return Math.max(1, Math.min(capMs, deadline - Date.now()));
+}
+
+async function cohereScores(
+  facts: EvidenceFacts[],
+  context: RankingContext,
+  deadline: number,
+): Promise<Map<string, number> | null> {
   const keys = cohereKeys();
   if (!keys.length || facts.length < 2) return null;
 
   for (const key of keys) {
+    if (Date.now() >= deadline) break;
     try {
-      const response = await fetchWithTimeout(COHERE_URL, {
+      const { response, payload } = await fetchJsonWithTimeout<{ results?: Array<{ index?: number; relevance_score?: number }> }>(COHERE_URL, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${key}`,
@@ -197,21 +209,21 @@ async function cohereScores(facts: EvidenceFacts[], context: RankingContext): Pr
           documents: facts.map(documentFor),
           top_n: facts.length,
         }),
-      }, 5_000);
+      }, remainingTimeout(deadline, 5_000));
 
       if (!response.ok) {
         if ([401, 403, 429].includes(response.status)) continue;
         return null;
       }
-      const payload = await response.json() as { results?: Array<{ index?: number; relevance_score?: number }> };
       const scores = new Map<string, number>();
-      for (const result of payload.results || []) {
+      for (const result of payload?.results || []) {
         if (!Number.isInteger(result.index) || typeof result.relevance_score !== 'number') continue;
         const source = facts[result.index as number];
         if (source) scores.set(source.sourceId, clamp(result.relevance_score));
       }
       return scores.size ? scores : null;
     } catch {
+      if (Date.now() >= deadline) break;
       return null;
     }
   }
@@ -236,6 +248,7 @@ async function cerebrasReview(
   facts: EvidenceFacts[],
   context: RankingContext,
   cohere: Map<string, number> | null,
+  deadline: number,
 ): Promise<{ order: string[]; reasons: Record<string, string> } | null> {
   const keys = cerebrasKeys();
   if (!keys.length || facts.length < 2) return null;
@@ -254,8 +267,9 @@ async function cerebrasReview(
   ].join('\n');
 
   for (const key of keys) {
+    if (Date.now() >= deadline) break;
     try {
-      const response = await fetchWithTimeout(CEREBRAS_URL, {
+      const { response, payload } = await fetchJsonWithTimeout<{ choices?: Array<{ message?: { content?: string } }> }>(CEREBRAS_URL, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${key}`,
@@ -271,14 +285,13 @@ async function cerebrasReview(
             { role: 'user', content: prompt },
           ],
         }),
-      }, 6_000);
+      }, remainingTimeout(deadline, 6_000));
 
       if (!response.ok) {
         if ([401, 403, 429].includes(response.status)) continue;
         return null;
       }
-      const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-      const content = payload.choices?.[0]?.message?.content;
+      const content = payload?.choices?.[0]?.message?.content;
       if (!content) return null;
       const parsed = extractJsonObject(content);
       if (!parsed) return null;
@@ -288,6 +301,7 @@ async function cerebrasReview(
       );
       return order.length ? { order, reasons } : null;
     } catch {
+      if (Date.now() >= deadline) break;
       return null;
     }
   }
@@ -310,8 +324,11 @@ export async function rankPricingEvidence(
   }
 
   const deterministic = new Map(facts.map((fact) => [fact.sourceId, deterministicScore(fact)]));
-  const cohere = await cohereScores(facts, context);
-  const cerebras = await cerebrasReview(facts, context, cohere);
+  const deadline = Date.now() + AI_RANKING_BUDGET_MS;
+  const cohere = await cohereScores(facts, context, deadline);
+  const cerebras = Date.now() < deadline
+    ? await cerebrasReview(facts, context, cohere, deadline)
+    : null;
   const cerebrasOrder = new Map<string, number>();
   if (cerebras?.order.length) {
     const denominator = Math.max(1, cerebras.order.length - 1);

@@ -111,7 +111,7 @@ export async function searchFairVisitCash(input: {
     const base = summarizePrices([]);
     const summary = {
       ...base,
-      count: localBenchmarkEligible && validNumber(payload.area?.n_sources) ? Math.round(payload.area!.n_sources!) : observations.length,
+      count: observations.length,
       low: observations.length ? Math.min(...observations.map((item) => item.price)) : null,
       median: localBenchmarkEligible && validNumber(payload.area?.median) ? payload.area!.median! : null,
       high: observations.length ? Math.max(...observations.map((item) => item.price)) : null,

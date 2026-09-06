@@ -29,7 +29,7 @@ function stateFromFeature(feature: MapTilerFeature) {
   const region = contexts.find((item) => item.id?.startsWith('region.'));
   if (!region) return undefined;
   const code = region.short_code?.split('-').pop()?.toUpperCase();
-  return code && code.length === 2 ? code : region.text;
+  return code && /^[A-Z]{2}$/.test(code) ? code : undefined;
 }
 
 function cityFromFeature(feature: MapTilerFeature) {

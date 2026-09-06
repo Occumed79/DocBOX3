@@ -13,6 +13,12 @@ const schema = read('db/schema.sql');
 const render = read('render.yaml');
 const ui = read('components/pricing/PriceIntelligenceApp.tsx');
 const mapEnrichment = read('lib/pricing/map-enrichment.ts');
+const licensedFeed = read('lib/pricing/adapters/licensed-cash-feed.ts');
+const loa = read('lib/pricing/adapters/loa.ts');
+const openSources = read('lib/pricing/adapters/occumed-open-sources.ts');
+const location = read('lib/pricing/location.ts');
+const geocode = read('lib/pricing/geocode.ts');
+const ranking = read('lib/pricing/evidence-ranking.ts');
 
 const allowed = ['cash', 'self_pay', 'discounted_cash', 'uninsured', 'direct_pay', 'marketplace_cash'];
 const forbidden = [
@@ -22,11 +28,12 @@ const forbidden = [
 
 for (const basis of allowed) {
   assert.match(registry, new RegExp(`['\"]${basis}['\"]`), `registry must include ${basis}`);
-  assert.match(schema, new RegExp(`['\"]${basis}['\"]`), `database CHECK must include ${basis}`);
 }
 
 const checkBody = schema.match(/payment_basis\s+TEXT\s+NOT\s+NULL\s+CHECK\s*\(payment_basis\s+IN\s*\(([\s\S]*?)\)\)/i)?.[1] || '';
 assert.ok(checkBody, 'pi_price_observations payment-basis CHECK constraint must exist');
+const admittedBases = [...checkBody.matchAll(/'([^']+)'/g)].map((match) => match[1]).sort();
+assert.deepEqual(admittedBases, [...allowed].sort(), 'database CHECK must admit exactly the six approved payment bases');
 for (const basis of forbidden) {
   assert.doesNotMatch(checkBody, new RegExp(`['\"]${basis}['\"]`, 'i'), `database must reject ${basis}`);
 }
@@ -49,6 +56,19 @@ assert.doesNotMatch(ui, /SOURCE-BALANCED MEDIAN/, 'stale source-balanced label m
 assert.match(ui, /Independent evidence families/i, 'leadership report must expose provenance families');
 assert.match(ui, /Evidence #/, 'UI must surface evidence ranking');
 assert.doesNotMatch(ui, /PRICING_SOURCES\.slice\(0,\s*8\)/, 'lookup must not hide sources after the first eight');
+
+assert.match(licensedFeed, /currentProcedureMatch === true/, 'licensed feeds must require identified matching procedure context');
+assert.match(licensedFeed, /depth > 8/, 'licensed feed traversal must be depth bounded');
+assert.match(licensedFeed, /target\.protocol !== ['"]https:['"]/, 'licensed feed endpoints must require HTTPS');
+assert.match(licensedFeed, /redirect:\s*['"]manual['"]/, 'licensed feeds must disable automatic redirects');
+assert.match(loa, /effectiveCode\?\.toUpperCase\(\) === procedureCode\.toUpperCase\(\)/, 'Loa rows must have a matching effective procedure code');
+assert.doesNotMatch(openSources, /JSON\.stringify\(item\)\.toUpperCase\(\)/, 'TestWell must not match procedure codes via arbitrary JSON text');
+assert.match(openSources, /const modalityToken = norm\(modality\)/, 'Expected Health must normalize modality tokens');
+assert.match(openSources, /HOSPITAL_LEDGER_TTL_MS/, 'Hospital Ledger cache must expire');
+assert.match(location, /sort\(\(a, b\) => b\[0\]\.length - a\[0\]\.length\)/, 'state names must match longest first');
+assert.match(geocode, /\^\[A-Z\]\{2\}\$/, 'geocoded state must remain a two-letter code');
+assert.match(ranking, /AI_RANKING_BUDGET_MS = 8_000/, 'AI evidence ranking must have one bounded advisory budget');
+assert.match(turquoise, /TURQUOISE_REQUEST_BUDGET_MS = 12_000/, 'Turquoise requests must share a bounded search budget');
 
 assert.doesNotMatch(render, /CLEARHEALTHCOSTS_API_/i, 'ClearHealthCosts inactive credential placeholders must stay removed');
 assert.doesNotMatch(render, /FAIR_HEALTH_CASH_FEED_/i, 'FAIR Health inactive credential placeholders must stay removed');

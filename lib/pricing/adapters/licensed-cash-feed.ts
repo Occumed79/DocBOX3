@@ -113,16 +113,10 @@ function mergeContext(object: JsonObject, parent: Context): Context {
   };
 }
 
-function recordProcedureMatches(object: JsonObject, code: string, name: string) {
+function procedureMatchFor(object: JsonObject, code: string, inherited: boolean | undefined) {
   const codeValue = textFrom(object, ['procedure_code', 'code', 'billing_code', 'cpt', 'hcpcs', 'cdt']);
-  if (codeValue && codeValue.toLowerCase() === code.toLowerCase()) return true;
-  const nameValue = textFrom(object, ['procedure_name', 'service_name', 'description', 'name']);
-  if (!codeValue && nameValue) {
-    const normalizedName = name.toLowerCase();
-    const candidate = nameValue.toLowerCase();
-    return candidate.includes(normalizedName) || normalizedName.includes(candidate);
-  }
-  return !codeValue && !nameValue;
+  if (!codeValue) return inherited;
+  return codeValue.trim().toLowerCase() === code.trim().toLowerCase();
 }
 
 function extractCash(object: JsonObject, config: LicensedCashFeedConfig): { price: number; basis: EligiblePaymentBasis } | null {
@@ -156,17 +150,21 @@ function walk(
   inherited: Context,
   output: PriceObservationInput[],
   seen: Set<string>,
+  procedureMatched: boolean | undefined = undefined,
+  depth = 0,
 ) {
+  if (depth > 8) return;
   if (Array.isArray(value)) {
-    for (const item of value) walk(item, config, search, inherited, output, seen);
+    for (const item of value) walk(item, config, search, inherited, output, seen, procedureMatched, depth + 1);
     return;
   }
   const object = asObject(value);
   if (!object) return;
   const context = mergeContext(object, inherited);
+  const currentProcedureMatch = procedureMatchFor(object, search.procedureCode, procedureMatched);
   const cash = extractCash(object, config);
 
-  if (cash && recordProcedureMatches(object, search.procedureCode, search.procedureName)) {
+  if (cash && currentProcedureMatch === true) {
     const signature = [config.sourceId, context.providerName, context.city, context.state, search.procedureCode, cash.price].join('|');
     if (!seen.has(signature)) {
       seen.add(signature);
@@ -189,7 +187,9 @@ function walk(
   }
 
   for (const child of Object.values(object)) {
-    if (child && typeof child === 'object') walk(child, config, search, context, output, seen);
+    if (child && typeof child === 'object') {
+      walk(child, config, search, context, output, seen, currentProcedureMatch, depth + 1);
+    }
   }
 }
 
@@ -231,14 +231,23 @@ export async function searchLicensedCashFeed(config: LicensedCashFeedConfig, sea
   const endpoint = config.endpoint?.trim();
   if (!endpoint) return [];
 
+  const target = new URL(endpointFor(endpoint, search));
+  if (target.protocol !== 'https:') {
+    throw new Error(`${config.sourceName} cash feed endpoint must use HTTPS.`);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const headers: Record<string, string> = { accept: 'application/json' };
-    if (config.token?.trim()) headers[config.tokenHeader?.trim() || 'authorization'] = config.tokenHeader ? config.token.trim() : `Bearer ${config.token.trim()}`;
+    const token = config.token?.trim();
+    if (token) {
+      const headerName = config.tokenHeader?.trim();
+      headers[headerName || 'authorization'] = headerName ? token : `Bearer ${token}`;
+    }
 
     const method = config.method ?? 'GET';
-    const response = await fetch(endpointFor(endpoint, search), {
+    const response = await fetch(target, {
       method,
       headers: method === 'POST' ? { ...headers, 'content-type': 'application/json' } : headers,
       body: method === 'POST' ? JSON.stringify({
@@ -251,6 +260,7 @@ export async function searchLicensedCashFeed(config: LicensedCashFeedConfig, sea
         payment_basis: 'cash',
       }) : undefined,
       cache: 'no-store',
+      redirect: 'manual',
       signal: controller.signal,
     });
 
