@@ -27,6 +27,18 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Verify committed dependency lockfile
+        run: |
+          npm install --package-lock-only --legacy-peer-deps
+          if ! git diff --quiet -- package-lock.json; then
+            echo "::error::package-lock.json is stale. Commit the npm-resolved lockfile."
+            git --no-pager diff -- package-lock.json
+            exit 1
+          fi
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Verify self-pay pricing integrity
         run: npm run verify:pricing
 
