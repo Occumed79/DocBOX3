@@ -3,7 +3,6 @@ import { procedureFromCode } from '@/lib/pricing/procedures';
 import { searchMedRatesCash } from '@/lib/pricing/adapters/medrates';
 import { searchMedCompareCash } from '@/lib/pricing/adapters/medcompare';
 import { searchFairVisitCash } from '@/lib/pricing/adapters/fairvisit';
-import { searchOpenDocCash } from '@/lib/pricing/adapters/opendoc';
 import { searchLoaCash } from '@/lib/pricing/adapters/loa';
 import {
   PRIORITY_FEED_STATUS,
@@ -11,6 +10,7 @@ import {
   searchFairHealthCash,
   searchTurquoiseRawCash,
 } from '@/lib/pricing/adapters/priority-feeds';
+import { rankPricingEvidence } from '@/lib/pricing/evidence-ranking';
 import { summarizePrices } from '@/lib/pricing/statistics';
 import { geocodeUsLocation, type ResolvedLocation } from '@/lib/pricing/geocode';
 import type { PriceObservationInput } from '@/lib/pricing/source-registry';
@@ -32,6 +32,9 @@ type SourceResult = {
   disclaimer?: string;
   sourceScope?: string;
   dataRefreshed?: string;
+  evidenceRank?: number;
+  evidenceScore?: number;
+  evidenceReason?: string;
 };
 
 function emptySource(sourceId: string, sourceName: string, status: SourceStatus, error?: string): SourceResult {
@@ -202,11 +205,6 @@ export async function GET(request: NextRequest) {
       location: sourceLocation,
     }), resolvedLocation, radiusMiles),
     runFairVisitSource(procedure.code, procedure.name, resolvedLocation, radiusMiles),
-    runSource('opendoc', 'OpenDoc', () => searchOpenDocCash({
-      procedureCode: procedure.code,
-      procedureName: procedure.name,
-      state: resolvedLocation?.state,
-    }), resolvedLocation, radiusMiles),
     runSource('loa', 'Loa', () => searchLoaCash({
       procedureCode: procedure.code,
       procedureName: procedure.name,
@@ -227,6 +225,34 @@ export async function GET(request: NextRequest) {
     .filter((value): value is number => value !== null && Number.isFinite(value));
   const sourceBalancedMedian = summarizePrices(sourceMedians).median;
 
+  // AI ranks evidence quality only after the strict cash/self-pay filter and after all
+  // benchmark math has been computed. The national map skips external AI calls entirely.
+  const ranking = location
+    ? await rankPricingEvidence(sourceResults, {
+      procedureCode: procedure.code,
+      procedureName: procedure.name,
+      market: resolvedLocation?.displayName || location,
+    })
+    : {
+      provider: 'deterministic' as const,
+      advisoryOnly: true as const,
+      ranked: [],
+      note: 'National map search bypasses external AI ranking. Pricing and heat-map calculations remain deterministic.',
+    };
+
+  const rankBySource = new Map(ranking.ranked.map((item) => [item.sourceId, item]));
+  const rankedSourceResults = sourceResults
+    .map((source) => {
+      const ranked = rankBySource.get(source.sourceId);
+      return ranked ? {
+        ...source,
+        evidenceRank: ranked.rank,
+        evidenceScore: ranked.score,
+        evidenceReason: ranked.reason,
+      } : source;
+    })
+    .sort((a, b) => (a.evidenceRank ?? Number.MAX_SAFE_INTEGER) - (b.evidenceRank ?? Number.MAX_SAFE_INTEGER));
+
   return NextResponse.json({
     procedure,
     location: location ?? null,
@@ -239,17 +265,18 @@ export async function GET(request: NextRequest) {
       geographicMethod: resolvedLocation && radiusMiles
         ? 'Only observations verified inside the requested market are included; source-level state/national fallbacks are not allowed into the local headline benchmark.'
         : 'No radius filter was applied.',
+      rankingMethod: 'Cohere/Cerebras may rank evidence quality after strict filtering. Ranking is advisory only and cannot change a price, source median, pooled statistic, or headline benchmark.',
       sourceGuardrails: {
         fairHealth: 'Out-of-network/uninsured full-charge benchmarks and claims-derived amounts are not eligible. Only an explicitly licensed cash/self-pay field is accepted.',
         turquoise: 'Consumer Pricing composite estimates, negotiated rates, claims-derived values, and Medicare reference signals are not eligible. Only raw provider-published cash/discounted-cash fields are accepted.',
         clearHealthCosts: 'Only explicit cash/self-pay observations from the permitted API/feed are accepted.',
         fairVisitHealth: 'Only hospital-published discounted cash values are eligible. Medicare fields, national composite context, and state fallback medians are ignored.',
-        openDoc: 'Only explicit provider x service posted cash offers are accepted. Typical estimates, Sure Price context, and non-offer values are ignored.',
         loa: 'Only source-labeled cash, discounted-cash, or package-cash rows for an exact-city entity set are accepted. Negotiated rows and generic MRF rows without an explicit cash label are rejected.',
       },
     },
-    sources: sourceResults,
+    sources: rankedSourceResults,
     configuredFeeds: PRIORITY_FEED_STATUS,
+    ranking,
     combined: { ...pooled, median: sourceBalancedMedian },
     pooled,
     benchmark: { sourceCount: sourceMedians.length, median: sourceBalancedMedian },
