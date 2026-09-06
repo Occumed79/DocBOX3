@@ -1,3 +1,39 @@
+.pi-app { color-scheme: light; }
+
+.pi-compare-card {
+  grid-template-columns: 1.25fr 1fr .55fr .7fr;
+}
+
+.pi-location-resolution {
+  margin: 14px 4px -2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6e8093;
+  font-size: 9px;
+}
+
+.pi-location-resolution span {
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.pi-location-resolution strong {
+  color: #425f7b;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.pi-location-resolution b {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #62788e;
+  font-size: 8px;
+  background: rgba(255,255,255,.42);
+  border: 1px solid rgba(255,255,255,.6);
+}
+
 .pi-market-summary {
   margin-top: 16px;
   border-radius: 24px;
@@ -166,14 +202,20 @@
 
 .pi-map-workspace { position: relative; }
 
+@media (max-width: 960px) {
+  .pi-compare-card { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 760px) {
   .pi-market-summary,
   .pi-comparison-prices,
   .pi-report-metrics { grid-template-columns: 1fr 1fr; }
+  .pi-location-resolution { flex-wrap: wrap; }
 }
 
 @media (max-width: 520px) {
   .pi-market-summary,
   .pi-comparison-prices,
-  .pi-report-metrics { grid-template-columns: 1fr; }
+  .pi-report-metrics,
+  .pi-compare-card { grid-template-columns: 1fr; }
 }
