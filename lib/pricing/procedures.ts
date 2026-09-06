@@ -79,13 +79,43 @@ export const PROCEDURES: ProcedureDefinition[] = [
   },
 ];
 
+export function inferCodeSystem(code: string): ProcedureDefinition['codeSystem'] | null {
+  const normalized = code.trim().toUpperCase();
+  if (/^D\d{4}$/.test(normalized)) return 'CDT';
+  if (/^\d{5}$/.test(normalized) || /^\d{4}[FT]$/.test(normalized)) return 'CPT';
+  if (/^[A-CE-Z]\d{4}$/.test(normalized)) return 'HCPCS';
+  return null;
+}
+
+export function procedureFromCode(code: string): ProcedureDefinition | null {
+  const normalized = code.trim().toUpperCase();
+  const known = PROCEDURES.find((procedure) => procedure.code.toUpperCase() === normalized);
+  if (known) return known;
+  const codeSystem = inferCodeSystem(normalized);
+  if (!codeSystem) return null;
+  return {
+    code: normalized,
+    codeSystem,
+    name: `${codeSystem} ${normalized}`,
+    category: 'Code lookup',
+    aliases: [],
+  };
+}
+
 export function searchProcedures(query: string): ProcedureDefinition[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return PROCEDURES;
-  return PROCEDURES.filter((procedure) => {
+  const matches = PROCEDURES.filter((procedure) => {
     const haystack = [procedure.code, procedure.codeSystem, procedure.name, procedure.category, ...procedure.aliases]
       .join(' ')
       .toLowerCase();
     return haystack.includes(normalized);
   });
+
+  if (matches.length) return matches;
+
+  // Let users search any syntactically valid CPT/CDT/HCPCS code without requiring a
+  // bundled proprietary code-description catalog. Upstream sources supply the pricing.
+  const custom = procedureFromCode(query);
+  return custom ? [custom] : [];
 }
