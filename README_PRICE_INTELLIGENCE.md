@@ -95,7 +95,7 @@ Hospital-published discounted-cash values only. Medicare fields and state/nation
 Only source-labeled cash, discounted-cash, package-cash, or verified self-pay rows are accepted. Negotiated and generic unlabeled MRF rows are rejected.
 
 #### MarketCare
-Real provider cash quotes captured by phone or provider cash menus in Austin. Its public lowest verified quote is supporting floor evidence rather than a headline median vote.
+Real provider cash quotes captured by phone or provider cash menus in Austin. Its public lowest verified cash quote is supporting floor evidence rather than a headline median vote.
 
 #### Expected Health
 Clinic-published imaging cash-price index. Metro/modality evidence is retained separately from exact CPT hospital data.
@@ -191,6 +191,20 @@ The backend automatically mints, caches and refreshes short-lived Turquoise acce
 
 No ClearHealthCosts, FAIR Health, or old `TURQUOISE_RAW_CASH_FEED_*` variables are required.
 
+## Dependency security and reproducibility
+
+The application tracks Next.js 15.5.25 and keeps the committed npm lockfile synchronized with `package.json`. CI regenerates the lockfile in verification mode and fails if the committed lockfile would change.
+
+Production dependency audit is also a release gate. `npm audit --omit=dev --audit-level=high` must pass before pricing-integrity checks or the production build can be considered green.
+
+Root npm overrides keep vulnerable transitive releases out of the production dependency tree while remaining inside Next.js-compatible major versions:
+
+- `nanoid` 3.3.18
+- `postcss` 8.5.24
+- `sharp` 0.35.4
+
+The `Refresh dependency lockfile` workflow deterministically regenerates `package-lock.json` after `package.json` changes. Public-source smoke testing installs with `npm ci` so the live-source test uses the exact committed dependency graph.
+
 ## Verification
 
 ### Static pricing-integrity regression checks
@@ -215,7 +229,17 @@ The integrity suite verifies, among other things:
 - FAIR Health/ClearHealthCosts inactive credentials do not return;
 - OpenDoc remains physically absent.
 
-GitHub Actions runs this integrity suite before every production build on the feature branch and on PRs targeting `main`.
+GitHub Actions runs the dependency lock check, production audit, pricing-integrity suite and production build on the feature branch and on PRs targeting `main`.
+
+### Public-source smoke test
+
+Run:
+
+```bash
+npm run verify:public-sources
+```
+
+The GitHub public-source workflow starts the production Next.js server and exercises real external cash-price sources. It verifies that returned observations use only the approved payment bases and saves `public-source-smoke.json` as an artifact. It reruns after source, pricing-route, package, or lockfile changes.
 
 ### Deployed runtime matrix
 
