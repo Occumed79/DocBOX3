@@ -111,9 +111,14 @@ export async function GET(request: NextRequest) {
   }
 
   const resolvedLocation = location ? await geocodeUsLocation(location) : null;
-  const sourceLocation = resolvedLocation?.state
-    ? `${location || resolvedLocation.displayName}, ${resolvedLocation.state}`
-    : location;
+  if (location && !resolvedLocation) {
+    return NextResponse.json({
+      error: 'The market location could not be resolved. A local benchmark will not be calculated without verified coordinates. Check the location and MapTiler configuration.',
+    }, { status: 422 });
+  }
+
+  // MedRates uses the exact resolved coordinates. MedCompare needs state context.
+  const sourceLocation = resolvedLocation?.state || location;
 
   const [medRates, medCompare] = await Promise.all([
     runSource('medrates', 'MedRates.fyi', () => searchMedRatesCash({
