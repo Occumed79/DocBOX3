@@ -18,6 +18,7 @@ import './styles/glacial-palette.css';
 import './styles/landing-glacial.css';
 import './styles/price-intelligence.css';
 import './styles/price-results.css';
+import './styles/price-report.css';
 
 export const metadata: Metadata = {
   title: 'Price Intelligence | Occu-Med',
