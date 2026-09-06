@@ -24,6 +24,9 @@ jobs:
       - name: Apply verified review fixes
         run: python .github/scripts/apply_review_hardening.py
 
+      - name: Keep workflow edits for connector-managed commits
+        run: git checkout HEAD -- .github/workflows/ci.yml .github/workflows/pricing-runtime.yml .github/workflows/public-source-smoke.yml
+
       - name: Commit hardening changes
         env:
           GITHUB_TOKEN: ${{ github.token }}
