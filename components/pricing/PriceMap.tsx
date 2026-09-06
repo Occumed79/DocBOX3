@@ -73,7 +73,22 @@ export default function PriceMap({ procedure, observations = [], metric = 'index
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [activeMetric, setActiveMetric] = useState<'index' | 'cash'>(metric);
   const apiKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+
+  useEffect(() => setActiveMetric(metric), [metric]);
+
+  // Bind the existing toolbar Metric select. This keeps the independent map control
+  // functional without coupling it to Lookup/Compare state.
+  useEffect(() => {
+    const controls = Array.from(document.querySelectorAll<HTMLSelectElement>('.pi-map-toolbar .pi-field.compact select'));
+    const metricSelect = controls.at(-1);
+    if (!metricSelect) return;
+    const readMetric = () => setActiveMetric(metricSelect.value === 'index' ? 'index' : 'cash');
+    readMetric();
+    metricSelect.addEventListener('change', readMetric);
+    return () => metricSelect.removeEventListener('change', readMetric);
+  }, []);
 
   const priceBounds = useMemo(() => {
     const prices = observations.map((observation) => observation.price).filter((value) => Number.isFinite(value) && value > 0);
@@ -127,7 +142,7 @@ export default function PriceMap({ procedure, observations = [], metric = 'index
           if (!geoJson.features.length) return;
           map.addSource('self-pay-prices', { type: 'geojson', data: geoJson });
 
-          const heatWeight = metric === 'cash'
+          const heatWeight = activeMetric === 'cash'
             ? [
               'interpolate', ['linear'], ['get', 'price'],
               priceBounds.low, 0.1,
@@ -204,17 +219,17 @@ export default function PriceMap({ procedure, observations = [], metric = 'index
       mapRef.current?.remove?.();
       mapRef.current = null;
     };
-  }, [apiKey, geoJson, metric, priceBounds.high, priceBounds.low]);
+  }, [activeMetric, apiKey, geoJson, priceBounds.high, priceBounds.low]);
 
-  const legendLow = metric === 'cash' ? money(priceBounds.low) : 'LOWER';
-  const legendHigh = metric === 'cash' ? money(priceBounds.high) : 'HIGHER';
+  const legendLow = activeMetric === 'cash' ? money(priceBounds.low) : 'LOWER';
+  const legendHigh = activeMetric === 'cash' ? money(priceBounds.high) : 'HIGHER';
 
   return (
     <div className="pi-map-stage">
       <div className="pi-map-meta glass-panel">
         <span className="pi-eyebrow">PRICE HEAT MAP</span>
         <strong>{procedure.name}</strong>
-        <span>{procedure.codeSystem} {procedure.code} · {metric === 'cash' ? 'Cash price' : 'Relative price index'}</span>
+        <span>{procedure.codeSystem} {procedure.code} · {activeMetric === 'cash' ? 'Cash price' : 'Relative price index'}</span>
       </div>
 
       {!apiKey ? (
@@ -231,7 +246,7 @@ export default function PriceMap({ procedure, observations = [], metric = 'index
         <div ref={containerRef} className="pi-map-canvas" aria-label={`Self-pay price heat map for ${procedure.name}`} />
       )}
 
-      <div className="pi-map-legend glass-panel" aria-label={metric === 'cash' ? 'Cash price legend' : 'Price index legend'}>
+      <div className="pi-map-legend glass-panel" aria-label={activeMetric === 'cash' ? 'Cash price legend' : 'Price index legend'}>
         <span>{legendLow}</span>
         <div className="pi-legend-ramp" />
         <span>{legendHigh}</span>
