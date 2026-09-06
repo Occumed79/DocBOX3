@@ -151,6 +151,8 @@ export type MedRatesSearchInput = {
   procedureCode: string;
   procedureName: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export async function searchMedRatesCash(input: MedRatesSearchInput): Promise<PriceObservationInput[]> {
@@ -158,18 +160,25 @@ export async function searchMedRatesCash(input: MedRatesSearchInput): Promise<Pr
   const timeout = setTimeout(() => controller.abort(), 12_000);
 
   try {
-    const query = [input.procedureCode, input.procedureName, input.location ? `near ${input.location}` : '']
-      .filter(Boolean)
-      .join(' ');
+    const body: Record<string, unknown> = {
+      query: `${input.procedureCode} ${input.procedureName}`,
+      codes_per_page: 5,
+      hospitals_per_code: 50,
+    };
+
+    // MedRates explicitly supports coordinate-scoped searches. Keep the free-text
+    // location out of the procedure query once real coordinates are available.
+    if (Number.isFinite(input.latitude) && Number.isFinite(input.longitude)) {
+      body.lat = input.latitude;
+      body.lng = input.longitude;
+    } else if (input.location) {
+      body.query = `${body.query} near ${input.location}`;
+    }
 
     const response = await fetch(MEDRATES_SEARCH_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        query,
-        codes_per_page: 5,
-        hospitals_per_code: 50,
-      }),
+      body: JSON.stringify(body),
       cache: 'no-store',
       signal: controller.signal,
     });
