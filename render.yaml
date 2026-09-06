@@ -12,6 +12,40 @@ services:
         value: production
       - key: NEXT_PUBLIC_MAPTILER_KEY
         sync: false
+
+      # ClearHealthCosts permitted API/feed. URL may contain placeholders:
+      # {code} {procedure} {location} {lat} {lon} {radius}
+      - key: CLEARHEALTHCOSTS_API_URL
+        sync: false
+      - key: CLEARHEALTHCOSTS_API_KEY
+        sync: false
+      - key: CLEARHEALTHCOSTS_API_KEY_HEADER
+        sync: false
+      - key: CLEARHEALTHCOSTS_API_METHOD
+        value: GET
+
+      # Turquoise: raw provider-published cash / Discounted Cash Price feed only.
+      # Do not point this at the composite Consumer Pricing estimate endpoint.
+      - key: TURQUOISE_RAW_CASH_FEED_URL
+        sync: false
+      - key: TURQUOISE_RAW_CASH_FEED_TOKEN
+        sync: false
+      - key: TURQUOISE_RAW_CASH_FEED_TOKEN_HEADER
+        sync: false
+      - key: TURQUOISE_RAW_CASH_FEED_METHOD
+        value: GET
+
+      # FAIR Health: only a licensed endpoint whose returned field is explicitly
+      # cash/self-pay. Out-of-network charges and claims/allowed benchmarks are excluded.
+      - key: FAIR_HEALTH_CASH_FEED_URL
+        sync: false
+      - key: FAIR_HEALTH_CASH_FEED_TOKEN
+        sync: false
+      - key: FAIR_HEALTH_CASH_FEED_TOKEN_HEADER
+        sync: false
+      - key: FAIR_HEALTH_CASH_FEED_METHOD
+        value: GET
+
       - key: S3_BUCKET
         sync: false
       - key: S3_ENDPOINT
