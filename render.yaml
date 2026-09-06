@@ -24,16 +24,14 @@ services:
       - key: CLEARHEALTHCOSTS_API_METHOD
         value: GET
 
-      # Turquoise: raw provider-published cash / Discounted Cash Price feed only.
-      # Do not point this at the composite Consumer Pricing estimate endpoint.
-      - key: TURQUOISE_RAW_CASH_FEED_URL
+      # Turquoise Consumer Pricing API OAuth 2.0 client credentials.
+      # The backend mints/caches short-lived bearer tokens and requests cash pricing only.
+      - key: TURQUOISE_ORGANIZATION_ID
         sync: false
-      - key: TURQUOISE_RAW_CASH_FEED_TOKEN
+      - key: TURQUOISE_CLIENT_ID
         sync: false
-      - key: TURQUOISE_RAW_CASH_FEED_TOKEN_HEADER
+      - key: TURQUOISE_CLIENT_SECRET
         sync: false
-      - key: TURQUOISE_RAW_CASH_FEED_METHOD
-        value: GET
 
       # FAIR Health: only a licensed endpoint whose returned field is explicitly
       # cash/self-pay. Out-of-network charges and claims/allowed benchmarks are excluded.
