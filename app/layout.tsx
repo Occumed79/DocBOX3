@@ -16,18 +16,19 @@ import './styles/landing-liquid.css';
 import './styles/docbox-polish.css';
 import './styles/glacial-palette.css';
 import './styles/landing-glacial.css';
+import './styles/price-intelligence.css';
 
 export const metadata: Metadata = {
-  title: 'DocBox | Occu-Med',
-  description: 'Occu-Med DocBox — a luminous visual workspace for storing, previewing, organizing, and securely sharing documents.',
+  title: 'Price Intelligence | Occu-Med',
+  description: 'Self-pay healthcare price intelligence, geographic market exploration, quote comparison, and evidence-based pricing reports.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#415881',
-  colorScheme: 'dark',
+  themeColor: '#e9f1f8',
+  colorScheme: 'light',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
