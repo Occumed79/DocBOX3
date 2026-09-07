@@ -1,0 +1,48 @@
+name: Build verification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - feature/self-pay-price-intelligence
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci --legacy-peer-deps
+
+      - name: Verify committed dependency lockfile
+        run: |
+          npm install --package-lock-only --legacy-peer-deps
+          if ! git diff --quiet -- package-lock.json; then
+            echo "::error::package-lock.json is stale. Commit the npm-resolved lockfile."
+            git --no-pager diff -- package-lock.json
+            exit 1
+          fi
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Verify self-pay pricing integrity
+        run: npm run verify:pricing
+
+      - name: Type-check and production build
+        run: npm run build

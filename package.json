@@ -8,11 +8,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "verify:pricing": "node scripts/verify-pricing-integrity.mjs",
+    "verify:public-sources": "node scripts/public-source-smoke.mjs",
+    "verify:runtime": "node scripts/runtime-source-matrix.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
-    "next": "^15.5.19",
+    "next": "^15.5.25",
     "pg": "^8.16.3",
     "react": "^18",
     "react-dom": "^18",
@@ -24,5 +27,10 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "typescript": "^5"
+  },
+  "overrides": {
+    "nanoid": "3.3.18",
+    "postcss": "8.5.24",
+    "sharp": "0.35.4"
   }
 }

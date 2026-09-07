@@ -10,6 +10,41 @@ services:
         sync: false
       - key: NODE_ENV
         value: production
+      - key: NEXT_PUBLIC_MAPTILER_KEY
+        sync: false
+
+      # Turquoise OAuth — the only price-source credential currently required.
+      # The app mints/caches short-lived bearer tokens automatically and queries
+      # only pricing.type=cash.
+      - key: TURQUOISE_ORGANIZATION_ID
+        sync: false
+      - key: TURQUOISE_CLIENT_ID
+        sync: false
+      - key: TURQUOISE_CLIENT_SECRET
+        sync: false
+
+      # Other active public price sources require no Render secret. These include
+      # Hospital Ledger, PriceTransparency.io, MarketCare, Expected Health,
+      # RadiologyAssist, TestWell, LabTestInsight and Real Dental Costs, plus the
+      # existing open MedRates/MedCompare/FairVisit/Loa adapters. Registered
+      # sources contribute zero unless a deterministic eligible cash observation
+      # is available; MDsave/Tendo remains credential-required.
+
+      # Advisory evidence ranking only. These server-side keys never affect price math.
+      # Secondary keys are used only as failover for auth/rate-limit failures.
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY_2
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: COHERE_API_KEY_2
+        sync: false
+      - key: COHERE_API_KEY_3
+        sync: false
+      - key: COHERE_API_KEY_4
+        sync: false
+
       - key: S3_BUCKET
         sync: false
       - key: S3_ENDPOINT
