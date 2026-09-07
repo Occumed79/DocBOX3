@@ -58,6 +58,18 @@ for (const test of matrix) {
       }
     }
 
+    const sourceDiagnostics = Object.fromEntries(payload.sources.map((source) => [source.sourceId, {
+      status: source.status,
+      error: source.error || null,
+      observations: source.observations?.length || 0,
+      summaryCount: source.summary?.count || 0,
+      median: source.summary?.median ?? null,
+      excludedByRadius: source.excludedByRadius || 0,
+      excludedWithoutCoordinates: source.excludedWithoutCoordinates || 0,
+      scope: source.sourceScope || null,
+      headlineEligible: source.headlineEligible !== false,
+    }]));
+
     const record = {
       ...test,
       ok: true,
@@ -68,9 +80,13 @@ for (const test of matrix) {
       mappable: payload?.map?.mappableObservationCount ?? 0,
       ranking: payload?.ranking?.provider ?? null,
       sourceStatuses: Object.fromEntries(payload.sources.map((source) => [source.sourceId, source.status])),
+      sourceDiagnostics,
     };
     results.push(record);
     console.log(`✓ ${test.area.padEnd(14)} ${test.code.padEnd(6)} ${test.location.padEnd(18)} median=${record.median ?? '—'} obs=${record.observations} families=${record.provenanceFamilies}`);
+    for (const [sourceId, diagnostic] of Object.entries(sourceDiagnostics)) {
+      if (diagnostic.status === 'error') console.log(`  ! ${sourceId}: ${diagnostic.error || 'unknown upstream error'}`);
+    }
   } catch (error) {
     results.push({ ...test, ok: false, error: error instanceof Error ? error.message : String(error) });
     console.error(`✗ ${test.area} ${test.code} ${test.location}: ${error instanceof Error ? error.message : error}`);
