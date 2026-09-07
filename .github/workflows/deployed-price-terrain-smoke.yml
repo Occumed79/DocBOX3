@@ -1,0 +1,73 @@
+name: Deployed price-terrain smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'components/pricing/**'
+      - 'app/vault/**'
+      - 'app/styles/price-intelligence-v2.css'
+      - 'lib/pricing/**'
+      - 'app/api/pricing/**'
+      - '.github/workflows/deployed-price-terrain-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deployed-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: https://docbox3-usme.onrender.com
+      PRICE_INTELLIGENCE_BASE_URL: https://docbox3-usme.onrender.com
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Wait for Render to serve this map-first release
+        shell: bash
+        run: |
+          set -euo pipefail
+          matched=0
+          for i in $(seq 1 60); do
+            body="$(curl -LfsS --max-time 20 "$BASE_URL/vault" || true)"
+            if printf '%s' "$body" | grep -Fq 'Spatial self-pay market engine'; then
+              echo "Render is serving the map-first Price Intelligence workspace."
+              matched=1
+              break
+            fi
+            echo "Waiting for Render deployment ($i/60)..."
+            sleep 10
+          done
+          if [ "$matched" -ne 1 ]; then
+            echo "Render never exposed the expected map-first workspace marker."
+            exit 1
+          fi
+
+      - name: Verify deployed health endpoint
+        run: curl -LfsS --max-time 30 "$BASE_URL/api/health"
+
+      - name: Run deployed pricing matrix
+        run: npm run verify:runtime
+
+      - name: Upload deployed runtime report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-runtime-source-matrix
+          path: runtime-source-matrix.json
+          if-no-files-found: ignore
