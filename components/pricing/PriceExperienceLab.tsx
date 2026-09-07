@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import PriceTerrainMap, { type TerrainInspection, type TerrainMode, type TerrainObservation } from './PriceTerrainMap';
+import PriceTerrainMap, { type TerrainInspection, type TerrainObservation } from './PriceTerrainMap';
 import { PROCEDURES, searchProcedures, type ProcedureDefinition } from '@/lib/pricing/procedures';
 
-type Mode = 'atlas' | 'workbench' | 'canvas' | 'surface' | 'constellation';
+type Lens = 'geography' | 'distribution' | 'confidence' | 'decision' | 'comparables';
 
 type Observation = {
   sourceId: string;
@@ -31,6 +31,7 @@ type SourceResult = {
   evidenceRank?: number;
   evidenceScore?: number;
   headlineEligible?: boolean;
+  error?: string;
 };
 
 type SearchResult = {
@@ -46,25 +47,45 @@ type SearchResult = {
 
 type FlatObservation = Observation & { sourceName: string; family: string };
 
-type MarketNode = {
+type MarketStat = {
   key: string;
   label: string;
+  city?: string;
+  state?: string;
   count: number;
   median: number;
   low: number;
   high: number;
+  p25: number;
+  p75: number;
+  spreadRatio: number;
+  familyCount: number;
 };
 
-const MODES: Array<{ id: Mode; number: string; name: string; subtitle: string }> = [
-  { id: 'atlas', number: '01', name: 'Price Atlas', subtitle: 'Geography is the result' },
-  { id: 'workbench', number: '02', name: 'Spatial Workbench', subtitle: 'Evidence becomes an instrument panel' },
-  { id: 'canvas', number: '03', name: 'Infinite Canvas', subtitle: 'Every observation becomes a point in space' },
-  { id: 'surface', number: '04', name: 'Living Surface', subtitle: 'Price becomes physical terrain' },
-  { id: 'constellation', number: '05', name: 'Constellation', subtitle: 'Markets orbit the benchmark' },
+type ComparableMarket = MarketStat & {
+  similarity: number;
+  angle: number;
+  radius: number;
+  tone: 'lower' | 'similar' | 'higher';
+};
+
+const LENSES: Array<{ id: Lens; number: string; name: string; question: string }> = [
+  { id: 'geography', number: '01', name: 'Market Geography', question: 'Where is usable evidence and how dense is the network?' },
+  { id: 'distribution', number: '02', name: 'Price Distribution', question: 'What is normal, clustered, or an outlier?' },
+  { id: 'confidence', number: '03', name: 'Evidence Confidence', question: 'How much should I trust this benchmark?' },
+  { id: 'decision', number: '04', name: 'Quote Decision', question: 'Is the clinic quote reasonable and what should I target?' },
+  { id: 'comparables', number: '05', name: 'Comparable Markets', question: 'Which other markets are genuinely analogous?' },
 ];
 
+const LEGACY_LENS: Record<string, Lens> = {
+  atlas: 'geography',
+  workbench: 'distribution',
+  canvas: 'confidence',
+  surface: 'decision',
+  constellation: 'comparables',
+};
+
 const DEFAULT_PROCEDURE = PROCEDURES.find((item) => item.code === '71046') || PROCEDURES[0];
-const FALLBACK_PROCEDURE = DEFAULT_PROCEDURE;
 
 function money(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -82,18 +103,28 @@ function percentile(values: number[], p: number) {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const index = (sorted.length - 1) * p;
-  const low = Math.floor(index);
-  const high = Math.ceil(index);
-  if (low === high) return sorted[low];
-  return sorted[low] + (sorted[high] - sorted[low]) * (index - low);
+  const lo = Math.floor(index);
+  const hi = Math.ceil(index);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (index - lo);
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function formatFamily(value: string) {
+function pct(value: number) {
+  return `${Math.round(value)}%`;
+}
+
+function familyLabel(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()).replace('Mrf', 'MRF');
+}
+
+function hash(value: string) {
+  let output = 0;
+  for (let index = 0; index < value.length; index += 1) output = ((output << 5) - output + value.charCodeAt(index)) | 0;
+  return Math.abs(output);
 }
 
 async function searchPricing(procedure: ProcedureDefinition, location?: string, radius?: number) {
@@ -106,311 +137,376 @@ async function searchPricing(procedure: ProcedureDefinition, location?: string, 
   return payload as SearchResult;
 }
 
-function useModeFromUrl() {
-  const [mode, setModeState] = useState<Mode>('atlas');
+function useLensFromUrl() {
+  const [lens, setLensState] = useState<Lens>('geography');
   useEffect(() => {
-    const value = new URLSearchParams(window.location.search).get('mode') as Mode | null;
-    if (value && MODES.some((item) => item.id === value)) setModeState(value);
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('lens') || params.get('mode');
+    if (!raw) return;
+    const next = (LENSES.some((item) => item.id === raw) ? raw : LEGACY_LENS[raw]) as Lens | undefined;
+    if (next) setLensState(next);
   }, []);
-  const setMode = (next: Mode) => {
-    setModeState(next);
+  const setLens = (next: Lens) => {
+    setLensState(next);
     const url = new URL(window.location.href);
-    url.searchParams.set('mode', next);
+    url.searchParams.set('lens', next);
+    url.searchParams.delete('mode');
     window.history.replaceState({}, '', url);
   };
-  return [mode, setMode] as const;
+  return [lens, setLens] as const;
 }
 
-function ModeSwitcher({ mode, onMode }: { mode: Mode; onMode: (mode: Mode) => void }) {
+function SearchCommand({
+  procedure,
+  onProcedure,
+  location,
+  onLocation,
+  radius,
+  onRadius,
+  loading,
+  onSearch,
+}: {
+  procedure: ProcedureDefinition;
+  onProcedure: (value: ProcedureDefinition) => void;
+  location: string;
+  onLocation: (value: string) => void;
+  radius: number;
+  onRadius: (value: number) => void;
+  loading: boolean;
+  onSearch: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const matches = useMemo(() => searchProcedures(query).slice(0, 12), [query]);
   return (
-    <nav className="pel2-mode-switcher" aria-label="Pricing visual systems">
-      {MODES.map((item) => (
-        <button key={item.id} type="button" className={mode === item.id ? 'active' : ''} onClick={() => onMode(item.id)} title={item.subtitle}>
-          <span>{item.number}</span><b>{item.name}</b>
+    <div className="pal-command">
+      <div className="pal-procedure-wrap">
+        <button type="button" className="pal-procedure" onClick={() => setOpen((value) => !value)}>
+          <span>{procedure.code}</span><strong>{procedure.name}</strong><i>⌄</i>
+        </button>
+        {open && (
+          <div className="pal-picker">
+            <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search CPT, CDT, HCPCS or procedure" />
+            <div>{matches.map((item) => (
+              <button key={`${item.codeSystem}-${item.code}`} type="button" onClick={() => { onProcedure(item); setOpen(false); setQuery(''); }}>
+                <b>{item.code}</b><span><strong>{item.name}</strong><small>{item.category}</small></span>
+              </button>
+            ))}</div>
+          </div>
+        )}
+      </div>
+      <label><span>MARKET</span><input value={location} onChange={(event) => onLocation(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSearch(); }} placeholder="City, state or ZIP — blank for national" /></label>
+      <label className="pal-radius"><span>RADIUS</span><select value={radius} onChange={(event) => onRadius(Number(event.target.value))}>{[25, 50, 75, 100, 150].map((item) => <option key={item}>{item}</option>)}</select></label>
+      <button className="pal-run" type="button" onClick={onSearch} disabled={loading}>{loading ? 'Resolving…' : 'Analyze'}<b>↗</b></button>
+    </div>
+  );
+}
+
+function LensNav({ lens, onLens }: { lens: Lens; onLens: (value: Lens) => void }) {
+  return (
+    <nav className="pal-lenses" aria-label="Analyst lenses">
+      {LENSES.map((item) => (
+        <button key={item.id} type="button" className={lens === item.id ? 'active' : ''} onClick={() => onLens(item.id)} title={item.question}>
+          <span>{item.number}</span><b>{item.name}</b><small>{item.question}</small>
         </button>
       ))}
     </nav>
   );
 }
 
-function SearchCommand({
-  procedure,
-  setProcedure,
-  location,
-  setLocation,
-  radius,
-  setRadius,
-  loading,
-  onSearch,
-}: {
-  procedure: ProcedureDefinition;
-  setProcedure: (value: ProcedureDefinition) => void;
-  location: string;
-  setLocation: (value: string) => void;
-  radius: number;
-  setRadius: (value: number) => void;
-  loading: boolean;
-  onSearch: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const matches = useMemo(() => searchProcedures(query).slice(0, 10), [query]);
+function CoverageVoid({ procedure }: { procedure: ProcedureDefinition }) {
   return (
-    <div className="pel2-command">
-      <div className="pel2-procedure-wrap">
-        <button className="pel2-procedure" type="button" onClick={() => setOpen((value) => !value)}>
-          <span>{procedure.code}</span><strong>{procedure.name}</strong><i>⌄</i>
-        </button>
-        {open && (
-          <div className="pel2-picker">
-            <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search CPT, CDT, HCPCS or procedure" />
-            <div>
-              {matches.map((item) => (
-                <button key={`${item.codeSystem}-${item.code}`} type="button" onClick={() => { setProcedure(item); setQuery(''); setOpen(false); }}>
-                  <b>{item.code}</b><span><strong>{item.name}</strong><small>{item.category}</small></span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      <label><span>MARKET</span><input value={location} onChange={(event) => setLocation(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSearch(); }} placeholder="City, state or ZIP — blank for national" /></label>
-      <label className="pel2-radius"><span>RADIUS</span><select value={radius} onChange={(event) => setRadius(Number(event.target.value))}>{[25, 50, 75, 100].map((item) => <option key={item}>{item}</option>)}</select></label>
-      <button className="pel2-run" type="button" onClick={onSearch} disabled={loading}>{loading ? 'Reading…' : 'Explore'}<b>↗</b></button>
-    </div>
-  );
-}
-
-function CoverageVoid({ procedure, onExample }: { procedure: ProcedureDefinition; onExample: () => void }) {
-  return (
-    <div className="pel2-void">
-      <div className="pel2-void-rings" aria-hidden="true"><i /><i /><i /><i /></div>
+    <section className="pal-void">
+      <div className="pal-void-rings" aria-hidden="true"><i /><i /><i /><i /></div>
       <span>NO QUALIFYING PUBLIC CASH EVIDENCE</span>
-      <h2>{procedure.code}</h2>
-      <p>This procedure currently has no qualifying observations in the live public-source runtime. The experience will not fabricate a map just to fill the screen.</p>
-      {procedure.code !== FALLBACK_PROCEDURE.code && <button type="button" onClick={onExample}>Open a live national example · {FALLBACK_PROCEDURE.code}</button>}
-    </div>
+      <h1>{procedure.code}</h1>
+      <p>The live public-source runtime currently has no qualifying self-pay observations for this procedure. The analyst workspace will not fabricate evidence to fill a visualization.</p>
+    </section>
   );
 }
 
-function AtlasView({ result, terrain, inspection, onInspect }: { result: SearchResult; terrain: TerrainObservation[]; inspection: TerrainInspection | null; onInspect: (value: TerrainInspection) => void }) {
+function GeographyLens({ result, terrain, inspection, onInspect }: {
+  result: SearchResult;
+  terrain: TerrainObservation[];
+  inspection: TerrainInspection | null;
+  onInspect: (value: TerrainInspection) => void;
+}) {
+  const markets = new Set(terrain.map((item) => [item.city, item.state].filter(Boolean).join(', ')).filter(Boolean));
+  const geocodedShare = result.combined.count ? (terrain.length / result.combined.count) * 100 : 0;
   return (
-    <section className="pel2-view pel2-atlas">
-      <div className="pel2-atlas-map"><PriceTerrainMap observations={terrain} mode="price" threeD={false} focus={result.resolvedLocation || null} radiusMiles={result.radiusMiles || null} onInspect={onInspect} /></div>
-      <div className="pel2-atlas-title">
-        <span>PRICE ATLAS · {result.procedure.codeSystem} {result.procedure.code}</span>
-        <h1>{result.procedure.name}</h1>
-        <p>{result.resolvedLocation?.displayName || 'United States'} · {result.combined.count.toLocaleString()} qualifying cash observations</p>
+    <section className="pal-view pal-geography">
+      <div className="pal-map"><PriceTerrainMap observations={terrain} mode="density" threeD={false} focus={result.resolvedLocation || null} radiusMiles={result.radiusMiles || null} onInspect={onInspect} /></div>
+      <div className="pal-geo-copy">
+        <span>MARKET GEOGRAPHY · {result.procedure.code}</span>
+        <h1>Where can I actually anchor a price?</h1>
+        <p>Density shows where usable self-pay evidence exists. This lens is about network coverage and market depth — not the benchmark itself.</p>
       </div>
-      <div className="pel2-atlas-median"><small>MARKET MEDIAN</small><strong>{money(result.combined.median)}</strong><span>{money(result.combined.low)} — {money(result.combined.high)}</span></div>
-      {inspection && <div className="pel2-atlas-inspect"><small>SELECTED SIGNAL</small><strong>{inspection.title}</strong><span>{inspection.count} observation{inspection.count === 1 ? '' : 's'} · median {money(inspection.median)}</span></div>}
-      <div className="pel2-atlas-scale"><span>LOWER</span><i /><span>HIGHER</span></div>
-    </section>
-  );
-}
-
-function buildHistogram(observations: FlatObservation[], buckets = 34) {
-  if (!observations.length) return [] as Array<{ x: number; count: number }>;
-  const prices = observations.map((item) => item.price);
-  const low = Math.min(...prices);
-  const high = Math.max(...prices);
-  const span = Math.max(1, high - low);
-  const rows = Array.from({ length: buckets }, (_, index) => ({ x: low + (index / Math.max(1, buckets - 1)) * span, count: 0 }));
-  observations.forEach((item) => {
-    const index = clamp(Math.floor(((item.price - low) / span) * buckets), 0, buckets - 1);
-    rows[index].count += 1;
-  });
-  return rows;
-}
-
-function DistributionWave({ observations }: { observations: FlatObservation[] }) {
-  const bins = useMemo(() => buildHistogram(observations), [observations]);
-  const max = Math.max(1, ...bins.map((item) => item.count));
-  const points = bins.map((item, index) => `${(index / Math.max(1, bins.length - 1)) * 1000},${260 - (item.count / max) * 210}`).join(' ');
-  return (
-    <svg className="pel2-wave" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-label="Observed price distribution">
-      <defs><linearGradient id="pel2WaveGradient" x1="0" x2="1"><stop offset="0" stopColor="#4fd7db" /><stop offset=".52" stopColor="#65a7ff" /><stop offset="1" stopColor="#c783ff" /></linearGradient></defs>
-      <polyline points={`0,285 ${points} 1000,285`} fill="rgba(68,130,220,.10)" stroke="none" />
-      <polyline points={points} fill="none" stroke="url(#pel2WaveGradient)" strokeWidth="7" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
-function WorkbenchView({ result, observations }: { result: SearchResult; observations: FlatObservation[] }) {
-  const sourceRows = result.sources.filter((source) => source.status === 'ok' && source.summary.count > 0).sort((a, b) => b.summary.count - a.summary.count).slice(0, 8);
-  const p25 = result.combined.p25;
-  const p75 = result.combined.p75;
-  return (
-    <section className="pel2-view pel2-workbench">
-      <div className="pel2-wb-head"><span>MARKET INSTRUMENT · {result.procedure.code}</span><h1>{result.procedure.name}</h1><p>{result.resolvedLocation?.displayName || 'National cash-price evidence'}</p></div>
-      <div className="pel2-wb-hero"><small>PROVENANCE-BALANCED MEDIAN</small><strong>{money(result.combined.median)}</strong><span>{result.combined.count.toLocaleString()} observations · {result.benchmark?.provenanceFamilyCount || 0} evidence families</span></div>
-      <div className="pel2-wb-wave"><DistributionWave observations={observations} /><div className="pel2-wb-axis"><span>{money(result.combined.low)}</span><span>{p25 ? `P25 ${money(p25)}` : ''}</span><b>{money(result.combined.median)}</b><span>{p75 ? `P75 ${money(p75)}` : ''}</span><span>{money(result.combined.high)}</span></div></div>
-      <div className="pel2-wb-sources">
-        <div className="pel2-wb-label"><span>SOURCE SIGNALS</span><small>live qualifying evidence only</small></div>
-        {sourceRows.map((source) => {
-          const width = result.combined.high && source.summary.median ? clamp((source.summary.median / result.combined.high) * 100, 6, 100) : 8;
-          return <div className="pel2-source-line" key={source.sourceId}><strong>{source.sourceName}</strong><i><em style={{ width: `${width}%` }} /></i><b>{money(source.summary.median)}</b><small>{source.summary.count}</small></div>;
-        })}
+      <div className="pal-geo-stats">
+        <div><small>GEOCODED SIGNALS</small><strong>{terrain.length.toLocaleString()}</strong><span>{pct(geocodedShare)} of qualifying evidence</span></div>
+        <div><small>RESOLVED MARKETS</small><strong>{markets.size.toLocaleString()}</strong><span>city/state clusters represented</span></div>
+        <div><small>SEARCH CONTEXT</small><strong>{result.resolvedLocation?.displayName || 'National'}</strong><span>{result.resolvedLocation ? `${result.radiusMiles || 50} mile strict radius` : 'all available public cash evidence'}</span></div>
       </div>
-      <div className="pel2-wb-families">{(result.benchmark?.familyMedians || []).map((family) => <div key={family.family}><span>{formatFamily(family.family)}</span><strong>{money(family.median)}</strong><small>{family.sourceCount} source{family.sourceCount === 1 ? '' : 's'}</small></div>)}</div>
+      {inspection && <aside className="pal-geo-inspect"><small>SELECTED NETWORK CELL</small><strong>{inspection.title}</strong><span>{inspection.count} signals · {inspection.sources.length} source{inspection.sources.length === 1 ? '' : 's'}</span><b>Observed median {money(inspection.median)}</b></aside>}
     </section>
   );
 }
 
-function CanvasView({ result, observations }: { result: SearchResult; observations: FlatObservation[] }) {
-  const sample = useMemo(() => observations.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).slice(0, 240), [observations]);
-  const med = result.combined.median || 1;
+function DistributionLens({ result, observations }: { result: SearchResult; observations: FlatObservation[] }) {
+  const prices = observations.map((item) => item.price).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+  const q1 = result.combined.p25 ?? percentile(prices, .25);
+  const q3 = result.combined.p75 ?? percentile(prices, .75);
+  const med = result.combined.median ?? median(prices);
+  const iqr = Math.max(1, q3 - q1);
+  const lowFence = Math.max(0, q1 - 1.5 * iqr);
+  const highFence = q3 + 1.5 * iqr;
+  const outliers = observations.filter((item) => item.price < lowFence || item.price > highFence).sort((a, b) => Math.abs(b.price - med) - Math.abs(a.price - med));
+  const axisLow = percentile(prices, .02) || prices[0] || 0;
+  const axisHigh = percentile(prices, .98) || prices[prices.length - 1] || 1;
+  const axisSpan = Math.max(1, axisHigh - axisLow);
+  const visible = observations.filter((item) => item.price >= axisLow && item.price <= axisHigh).slice(0, 700);
   return (
-    <section className="pel2-view pel2-canvas">
-      <div className="pel2-canvas-copy"><span>INFINITE DATA CANVAS · {result.procedure.code}</span><h1>Every price<br />has a position.</h1><p>Longitude places the signal. Latitude places the signal. Distance from the benchmark changes its visual weight.</p><div><b>{money(result.combined.median)}</b><small>national / selected-market median</small></div></div>
-      <svg className="pel2-field" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-label="Abstract geographic field of cash-price observations">
-        <defs><radialGradient id="pel2Glow"><stop offset="0" stopColor="#ffffff" stopOpacity=".9" /><stop offset=".25" stopColor="#79e9ff" stopOpacity=".55" /><stop offset="1" stopColor="#79e9ff" stopOpacity="0" /></radialGradient></defs>
-        {Array.from({ length: 12 }, (_, index) => <line key={`v-${index}`} x1={index * 110} y1="0" x2={index * 110} y2="720" className="pel2-gridline" />)}
-        {Array.from({ length: 8 }, (_, index) => <line key={`h-${index}`} x1="0" y1={index * 102} x2="1200" y2={index * 102} className="pel2-gridline" />)}
-        {sample.map((item, index) => {
-          const x = ((Number(item.longitude) + 180) / 360) * 1200;
-          const y = ((90 - Number(item.latitude)) / 180) * 720;
-          const variance = item.price / med;
-          const r = clamp(2.8 + Math.abs(variance - 1) * 8, 3, 11);
-          const cls = variance < .82 ? 'low' : variance > 1.22 ? 'high' : 'mid';
-          return <g key={`${item.sourceId}-${index}`} className={`pel2-field-point ${cls}`} style={{ '--delay': `${(index % 24) * -.09}s` } as CSSProperties}><circle cx={x} cy={y} r={r * 3.2} className="halo" /><circle cx={x} cy={y} r={r} /></g>;
+    <section className="pal-view pal-distribution">
+      <header className="pal-section-head">
+        <div><span>PRICE DISTRIBUTION · {result.procedure.code}</span><h1>What does “normal” actually look like?</h1><p>Every qualifying observation is placed on the price axis. The center mass shows the market; the tails identify negotiation risk and possible data anomalies.</p></div>
+        <div className="pal-big-stat"><small>INTERQUARTILE RANGE</small><strong>{money(q1)} — {money(q3)}</strong><span>{outliers.length} statistical outlier{outliers.length === 1 ? '' : 's'}</span></div>
+      </header>
+      <div className="pal-price-field">
+        <div className="pal-band typical" style={{ left: `${clamp(((q1 - axisLow) / axisSpan) * 100, 0, 100)}%`, width: `${clamp(((q3 - q1) / axisSpan) * 100, 1, 100)}%` }}><span>TYPICAL 50%</span></div>
+        <div className="pal-median-line" style={{ left: `${clamp(((med - axisLow) / axisSpan) * 100, 0, 100)}%` }}><b>{money(med)}</b></div>
+        {visible.map((item, index) => {
+          const left = clamp(((item.price - axisLow) / axisSpan) * 100, 0, 100);
+          const lane = 12 + (hash(`${item.sourceId}-${index}`) % 68);
+          const extreme = item.price < lowFence || item.price > highFence;
+          return <i key={`${item.sourceId}-${index}-${item.price}`} className={extreme ? 'outlier' : ''} style={{ left: `${left}%`, top: `${lane}%` }} title={`${item.providerName || item.sourceName} · ${money(item.price)}`} />;
         })}
-      </svg>
-      <div className="pel2-canvas-legend"><span>BELOW BENCHMARK</span><i /><span>ABOVE BENCHMARK</span></div>
-      <div className="pel2-canvas-count"><strong>{sample.length.toLocaleString()}</strong><span>geocoded signals rendered</span></div>
+        <div className="pal-axis"><span>{money(axisLow)}</span><span>P25 {money(q1)}</span><b>MEDIAN {money(med)}</b><span>P75 {money(q3)}</span><span>{money(axisHigh)}</span></div>
+      </div>
+      <div className="pal-distribution-bottom">
+        <div className="pal-outliers"><div className="pal-mini-title"><span>OUTLIER REVIEW</span><small>IQR rule · investigate, do not automatically discard</small></div>{outliers.slice(0, 7).map((item, index) => <article key={`${item.sourceId}-${index}`}><strong>{money(item.price)}</strong><span>{item.providerName || item.sourceName}</span><small>{[item.city, item.state].filter(Boolean).join(', ') || item.sourceName}</small></article>)}</div>
+        <div className="pal-percentiles"><div><small>LOW</small><strong>{money(result.combined.low)}</strong></div><div><small>P25</small><strong>{money(q1)}</strong></div><div><small>MEDIAN</small><strong>{money(med)}</strong></div><div><small>P75</small><strong>{money(q3)}</strong></div><div><small>HIGH</small><strong>{money(result.combined.high)}</strong></div></div>
+      </div>
     </section>
   );
 }
 
-function SurfaceView({ result, terrain, metric, setMetric, inspection, onInspect }: { result: SearchResult; terrain: TerrainObservation[]; metric: TerrainMode; setMetric: (value: TerrainMode) => void; inspection: TerrainInspection | null; onInspect: (value: TerrainInspection) => void }) {
+function ConfidenceLens({ result, observations }: { result: SearchResult; observations: FlatObservation[] }) {
+  const familyRows = result.benchmark?.familyMedians || [];
+  const sourceRows = result.sources.filter((source) => source.status === 'ok' && source.summary.count > 0).sort((a, b) => b.summary.count - a.summary.count);
+  const familyCount = familyRows.length || result.benchmark?.provenanceFamilyCount || 0;
+  const sourceCount = sourceRows.length;
+  const geocoded = observations.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).length;
+  const geoScore = observations.length ? (geocoded / observations.length) * 100 : 0;
+  const depthScore = clamp((Math.log10(Math.max(1, observations.length)) / 3) * 100, 0, 100);
+  const diversityScore = clamp((familyCount / 4) * 100, 0, 100);
+  const topShare = observations.length && sourceRows.length ? sourceRows[0].summary.count / observations.length : 1;
+  const concentrationScore = clamp(100 - topShare * 70, 0, 100);
+  const familyMedians = familyRows.map((item) => item.median).filter((value) => Number.isFinite(value) && value > 0);
+  const familyMean = familyMedians.length ? familyMedians.reduce((a, b) => a + b, 0) / familyMedians.length : 0;
+  const familyVariance = familyMedians.length > 1 ? familyMedians.reduce((sum, value) => sum + (value - familyMean) ** 2, 0) / familyMedians.length : 0;
+  const familyCv = familyMean ? Math.sqrt(familyVariance) / familyMean : 1;
+  const agreementScore = familyMedians.length > 1 ? clamp(100 - familyCv * 140, 0, 100) : 25;
+  const strength = Math.round((depthScore + diversityScore + geoScore + concentrationScore + agreementScore) / 5);
+  const strengthLabel = strength >= 80 ? 'Strong' : strength >= 60 ? 'Moderate' : strength >= 40 ? 'Limited' : 'Weak';
+  const metrics = [
+    ['Sample depth', depthScore, `${observations.length.toLocaleString()} qualifying observations`],
+    ['Source diversity', diversityScore, `${familyCount} independent evidence families`],
+    ['Geographic resolution', geoScore, `${geocoded.toLocaleString()} observations can be mapped`],
+    ['Source concentration', concentrationScore, `${Math.round(topShare * 100)}% from the largest contributing source`],
+    ['Cross-family agreement', agreementScore, familyMedians.length > 1 ? `${Math.round(familyCv * 100)}% coefficient of variation` : 'Only one evidence family is available'],
+  ] as const;
   return (
-    <section className="pel2-view pel2-surface">
-      <div className="pel2-surface-map"><PriceTerrainMap observations={terrain} mode={metric} threeD focus={result.resolvedLocation || null} radiusMiles={result.radiusMiles || null} onInspect={onInspect} /></div>
-      <div className="pel2-surface-copy"><span>THE MARKET AS TOPOGRAPHY · {result.procedure.code}</span><h1>{metric === 'price' ? 'Price has elevation.' : metric === 'density' ? 'Evidence has mass.' : 'Uncertainty has terrain.'}</h1><p>{result.procedure.name}</p><div className="pel2-surface-median"><small>MEDIAN</small><strong>{money(result.combined.median)}</strong></div></div>
-      <div className="pel2-surface-toggle">{(['price', 'density', 'spread'] as TerrainMode[]).map((item) => <button type="button" key={item} className={metric === item ? 'active' : ''} onClick={() => setMetric(item)}>{item}</button>)}</div>
-      {inspection && <div className="pel2-surface-inspect"><small>SELECTED TERRAIN</small><strong>{inspection.title}</strong><span>{money(inspection.median)} median · {inspection.count} record{inspection.count === 1 ? '' : 's'}</span></div>}
+    <section className="pal-view pal-confidence">
+      <header className="pal-section-head dark">
+        <div><span>EVIDENCE CONFIDENCE · {result.procedure.code}</span><h1>How hard should I lean on this number?</h1><p>This lens evaluates the evidence supporting the benchmark. The score is a transparent analyst heuristic and does not alter the benchmark calculation.</p></div>
+        <div className="pal-confidence-score"><small>DECISION-SUPPORT STRENGTH</small><strong>{strength}</strong><span>{strengthLabel}</span></div>
+      </header>
+      <div className="pal-confidence-grid">
+        <div className="pal-strength-bars">{metrics.map(([label, score, detail]) => <div key={label}><div><span>{label}</span><b>{Math.round(score)}/100</b></div><i><em style={{ width: `${score}%` }} /></i><small>{detail}</small></div>)}</div>
+        <div className="pal-family-matrix"><div className="pal-mini-title"><span>INDEPENDENT EVIDENCE FAMILIES</span><small>separate provenance reduces false certainty</small></div>{familyRows.length ? familyRows.map((row) => <article key={row.family}><span>{familyLabel(row.family)}</span><strong>{money(row.median)}</strong><small>{row.sourceCount} source{row.sourceCount === 1 ? '' : 's'}</small></article>) : <p>No independent family breakdown is available.</p>}</div>
+      </div>
+      <div className="pal-source-audit"><div className="pal-mini-title"><span>SOURCE AUDIT</span><small>{sourceCount} qualifying source{sourceCount === 1 ? '' : 's'}</small></div>{sourceRows.slice(0, 10).map((source) => <div key={source.sourceId}><strong>{source.sourceName}</strong><span>{familyLabel(source.provenanceFamily)}</span><b>{source.summary.count.toLocaleString()} obs.</b><em>{money(source.summary.median)}</em></div>)}</div>
     </section>
   );
 }
 
-function buildMarkets(observations: FlatObservation[], limit = 24): MarketNode[] {
-  const grouped = new Map<string, FlatObservation[]>();
+function DecisionLens({ result, observations, quote, onQuote, usingLocal }: { result: SearchResult; observations: FlatObservation[]; quote: string; onQuote: (value: string) => void; usingLocal: boolean }) {
+  const numeric = Number(quote.replace(/[$,]/g, ''));
+  const valid = Number.isFinite(numeric) && numeric > 0;
+  const prices = observations.map((item) => item.price).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+  const q1 = result.combined.p25 ?? percentile(prices, .25);
+  const q3 = result.combined.p75 ?? percentile(prices, .75);
+  const med = result.combined.median ?? median(prices);
+  const percentileRank = valid && prices.length ? (prices.filter((value) => value <= numeric).length / prices.length) * 100 : null;
+  const variance = valid && med ? ((numeric - med) / med) * 100 : null;
+  const iqr = Math.max(1, q3 - q1);
+  const highFence = q3 + 1.5 * iqr;
+  const lowFence = Math.max(0, q1 - 1.5 * iqr);
+  const status = !valid ? 'Enter a quote' : numeric > highFence ? 'Outlier high' : numeric > q3 ? 'Above typical market' : numeric >= q1 ? 'Within typical market' : numeric >= lowFence ? 'Below typical market' : 'Outlier low';
+  const tone = !valid ? 'idle' : numeric > highFence ? 'bad' : numeric > q3 ? 'warn' : numeric >= q1 ? 'good' : 'low';
+  const axisLow = Math.min(result.combined.low || q1, valid ? numeric : q1);
+  const axisHigh = Math.max(result.combined.high || q3, valid ? numeric : q3);
+  const span = Math.max(1, axisHigh - axisLow);
+  return (
+    <section className="pal-view pal-decision">
+      <header className="pal-section-head">
+        <div><span>QUOTE DECISION · {result.procedure.code}</span><h1>Turn market evidence into an actual decision.</h1><p>{usingLocal ? `Using the strict ${result.radiusMiles || 50}-mile market around ${result.resolvedLocation?.displayName || result.location}.` : 'No strict local market is active, so the national evidence set is being used as the fallback decision context.'}</p></div>
+        <label className="pal-quote-input"><small>CLINIC QUOTE</small><span>$</span><input inputMode="decimal" value={quote} onChange={(event) => onQuote(event.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" /></label>
+      </header>
+      <div className={`pal-decision-hero ${tone}`}><div><small>ASSESSMENT</small><strong>{status}</strong><span>{variance === null ? 'Add the proposed clinic price to place it inside the market.' : `${variance >= 0 ? '+' : ''}${Math.round(variance)}% versus market median · ${Math.round(percentileRank || 0)}th percentile`}</span></div><div><small>NEGOTIATION CORE</small><strong>{money(q1)} — {money(q3)}</strong><span>middle 50% of qualifying evidence</span></div></div>
+      <div className="pal-decision-scale"><div className="pal-normal-band" style={{ left: `${clamp(((q1 - axisLow) / span) * 100, 0, 100)}%`, width: `${clamp(((q3 - q1) / span) * 100, 1, 100)}%` }} /><i className="median" style={{ left: `${clamp(((med - axisLow) / span) * 100, 0, 100)}%` }}><b>MEDIAN<br />{money(med)}</b></i>{valid && <i className="quote" style={{ left: `${clamp(((numeric - axisLow) / span) * 100, 0, 100)}%` }}><b>QUOTE<br />{money(numeric)}</b></i>}<div><span>{money(axisLow)}</span><span>typical market</span><span>{money(axisHigh)}</span></div></div>
+      <div className="pal-decision-cards"><article><small>TARGET RANGE</small><strong>{money(q1)} — {money(q3)}</strong><p>The core observed market. A quote inside this band generally requires less justification.</p></article><article><small>ESCALATION THRESHOLD</small><strong>{money(highFence)}</strong><p>Above the standard 1.5×IQR upper fence. Review service differences and source validity before accepting.</p></article><article><small>EVIDENCE BASE</small><strong>{observations.length.toLocaleString()}</strong><p>{result.benchmark?.provenanceFamilyCount || 0} provenance families currently support this decision context.</p></article></div>
+    </section>
+  );
+}
+
+function buildMarkets(observations: FlatObservation[]) {
+  const groups = new Map<string, FlatObservation[]>();
   observations.forEach((item) => {
-    const label = [item.city, item.state].filter(Boolean).join(', ') || item.postalCode || item.sourceName;
+    const label = item.city && item.state ? `${item.city}, ${item.state}` : item.state || item.postalCode || '';
+    if (!label) return;
     const key = label.toLowerCase();
-    grouped.set(key, [...(grouped.get(key) || []), item]);
+    const bucket = groups.get(key) || [];
+    bucket.push(item);
+    groups.set(key, bucket);
   });
-  return [...grouped.entries()].map(([key, rows]) => {
-    const prices = rows.map((item) => item.price);
-    return { key, label: [rows[0].city, rows[0].state].filter(Boolean).join(', ') || rows[0].postalCode || rows[0].sourceName, count: rows.length, median: median(prices), low: Math.min(...prices), high: Math.max(...prices) };
-  }).sort((a, b) => b.count - a.count).slice(0, limit);
+  return [...groups.entries()].map(([key, rows]): MarketStat => {
+    const prices = rows.map((item) => item.price).sort((a, b) => a - b);
+    const p25 = percentile(prices, .25);
+    const p75 = percentile(prices, .75);
+    const med = median(prices);
+    return {
+      key,
+      label: rows[0].city && rows[0].state ? `${rows[0].city}, ${rows[0].state}` : rows[0].state || rows[0].postalCode || key,
+      city: rows[0].city,
+      state: rows[0].state,
+      count: rows.length,
+      median: med,
+      low: prices[0],
+      high: prices[prices.length - 1],
+      p25,
+      p75,
+      spreadRatio: med ? (p75 - p25) / med : 0,
+      familyCount: new Set(rows.map((item) => item.family)).size,
+    };
+  }).filter((item) => item.count >= 2 && item.median > 0);
 }
 
-function ConstellationView({ result, observations }: { result: SearchResult; observations: FlatObservation[] }) {
+function ComparableLens({ result, observations, localResult }: { result: SearchResult; observations: FlatObservation[]; localResult: SearchResult | null }) {
   const markets = useMemo(() => buildMarkets(observations), [observations]);
-  const benchmark = result.combined.median || 1;
+  const nationalMedian = result.combined.median || 1;
+  const anchorMedian = localResult?.combined.median || nationalMedian;
+  const anchorCount = localResult?.combined.count || Math.max(1, Math.round(median(markets.map((item) => item.count))));
+  const anchorFamilies = localResult?.benchmark?.provenanceFamilyCount || Math.max(1, Math.round(median(markets.map((item) => item.familyCount))));
+  const anchorSpread = localResult?.combined.p25 && localResult?.combined.p75 && anchorMedian ? (localResult.combined.p75 - localResult.combined.p25) / anchorMedian : median(markets.map((item) => item.spreadRatio)) || .25;
+  const anchorLabel = localResult?.resolvedLocation?.displayName || localResult?.location || 'National reference profile';
+  const comparable = useMemo<ComparableMarket[]>(() => markets.map((item) => {
+    const priceDistance = Math.abs(item.median - anchorMedian) / Math.max(1, anchorMedian);
+    const spreadDistance = Math.abs(item.spreadRatio - anchorSpread) / Math.max(.15, anchorSpread);
+    const volumeDistance = Math.abs(Math.log1p(item.count) - Math.log1p(anchorCount)) / 3;
+    const familyDistance = Math.abs(item.familyCount - anchorFamilies) / Math.max(2, anchorFamilies);
+    const raw = priceDistance * .48 + spreadDistance * .2 + volumeDistance * .18 + familyDistance * .14;
+    const similarity = clamp(100 - raw * 100, 0, 100);
+    const h = hash(item.key);
+    const tone: ComparableMarket['tone'] = item.median < anchorMedian * .9 ? 'lower' : item.median > anchorMedian * 1.1 ? 'higher' : 'similar';
+    return { ...item, similarity, angle: h % 360, radius: 18 + (100 - similarity) * .31, tone };
+  }).sort((a, b) => b.similarity - a.similarity), [markets, anchorMedian, anchorSpread, anchorCount, anchorFamilies]);
+  const stars = comparable.slice(0, 34);
   return (
-    <section className="pel2-view pel2-constellation">
-      <div className="pel2-stars" aria-hidden="true" />
-      <div className="pel2-const-copy"><span>MARKET CONSTELLATION · {result.procedure.code}</span><h1>One benchmark.<br />Many market orbits.</h1><p>Distance from the center is price deviation. Node size is evidence volume. Select a market with your eyes before you ever read a table.</p></div>
-      <svg className="pel2-orbits" viewBox="0 0 1000 760" aria-label="Market price constellation">
-        <defs><radialGradient id="pel2Core"><stop offset="0" stopColor="#fff" /><stop offset=".32" stopColor="#b9f3ff" /><stop offset="1" stopColor="#5ea5ff" stopOpacity="0" /></radialGradient></defs>
-        {[145, 235, 330].map((r) => <circle key={r} cx="500" cy="380" r={r} className="orbit" />)}
-        <circle cx="500" cy="380" r="82" fill="url(#pel2Core)" />
-        <circle cx="500" cy="380" r="35" className="core" />
-        <text x="500" y="371" textAnchor="middle" className="core-label">BENCHMARK</text>
-        <text x="500" y="397" textAnchor="middle" className="core-price">{money(result.combined.median)}</text>
-        {markets.map((market, index) => {
-          const deviation = Math.abs(market.median / benchmark - 1);
-          const radius = clamp(120 + deviation * 500, 125, 330);
-          const angle = (index / Math.max(1, markets.length)) * Math.PI * 2 - Math.PI / 2;
-          const x = 500 + Math.cos(angle) * radius;
-          const y = 380 + Math.sin(angle) * radius;
-          const size = clamp(6 + Math.sqrt(market.count) * 2.4, 7, 24);
-          const cls = market.median < benchmark * .92 ? 'below' : market.median > benchmark * 1.08 ? 'above' : 'near';
-          return <g key={market.key} className={`market-node ${cls}`} style={{ '--delay': `${index * -.18}s` } as CSSProperties}><line x1="500" y1="380" x2={x} y2={y} /><circle cx={x} cy={y} r={size * 2.4} className="node-glow" /><circle cx={x} cy={y} r={size} /><text x={x} y={y + size + 18} textAnchor="middle">{market.label}</text><text x={x} y={y + size + 34} textAnchor="middle" className="node-price">{money(market.median)}</text></g>;
+    <section className="pal-view pal-comparables">
+      <div className="pal-space-copy"><span>COMPARABLE MARKETS · {result.procedure.code}</span><h1>Find markets that behave like this one.</h1><p>Distance from the center is similarity, not price. Star size reflects evidence volume. Color shows whether the comparable market runs lower, similar, or higher than the anchor.</p><div><small>ANCHOR PROFILE</small><strong>{anchorLabel}</strong><span>{money(anchorMedian)} median · {anchorCount} observations · {anchorFamilies} evidence families</span></div></div>
+      <div className="pal-starfield" aria-label="Comparable market similarity constellation">
+        <div className="pal-orbit o1" /><div className="pal-orbit o2" /><div className="pal-orbit o3" />
+        <div className="pal-anchor-star"><i /><b>{localResult ? 'TARGET MARKET' : 'REFERENCE'}</b><strong>{money(anchorMedian)}</strong></div>
+        {stars.map((item, index) => {
+          const radians = (item.angle * Math.PI) / 180;
+          const x = 50 + Math.cos(radians) * item.radius;
+          const y = 50 + Math.sin(radians) * item.radius * .72;
+          const size = clamp(8 + Math.log2(item.count + 1) * 2.2, 10, 25);
+          const delay = -((hash(`${item.key}-delay`) % 400) / 100);
+          const duration = 1.8 + (hash(`${item.key}-duration`) % 240) / 100;
+          const style = { left: `${x}%`, top: `${y}%`, '--star-size': `${size}px`, '--twinkle-delay': `${delay}s`, '--twinkle-duration': `${duration}s` } as CSSProperties;
+          return <button key={item.key} type="button" className={`pal-star ${item.tone}`} style={style} title={`${item.label} · ${item.similarity.toFixed(0)}% similar · median ${money(item.median)}`}><i /><span>{item.label}</span><small>{Math.round(item.similarity)}% · {money(item.median)}</small></button>;
         })}
-      </svg>
-      <div className="pel2-const-meta"><div><strong>{markets.length}</strong><span>markets resolved</span></div><div><strong>{result.combined.count.toLocaleString()}</strong><span>qualifying observations</span></div><div><strong>{result.benchmark?.provenanceFamilyCount || 0}</strong><span>evidence families</span></div></div>
+      </div>
+      <aside className="pal-comparable-list"><div className="pal-mini-title"><span>CLOSEST ANALOGS</span><small>multi-factor similarity</small></div>{comparable.slice(0, 7).map((item, index) => <article key={item.key}><b>{String(index + 1).padStart(2, '0')}</b><div><strong>{item.label}</strong><small>{item.count} observations · {item.familyCount} evidence families</small></div><span>{Math.round(item.similarity)}%</span><em>{money(item.median)}</em></article>)}</aside>
+      <div className="pal-space-legend"><span><i className="lower" /> lower-price analog</span><span><i className="similar" /> similar-price analog</span><span><i className="higher" /> higher-price analog</span></div>
     </section>
   );
 }
 
 export default function PriceExperienceLab() {
-  const [mode, setMode] = useModeFromUrl();
+  const [lens, setLens] = useLensFromUrl();
   const [procedure, setProcedure] = useState(DEFAULT_PROCEDURE);
   const [location, setLocation] = useState('');
   const [radius, setRadius] = useState(50);
-  const [result, setResult] = useState<SearchResult | null>(null);
+  const [nationalResult, setNationalResult] = useState<SearchResult | null>(null);
+  const [localResult, setLocalResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inspection, setInspection] = useState<TerrainInspection | null>(null);
-  const [surfaceMetric, setSurfaceMetric] = useState<TerrainMode>('price');
+  const [quote, setQuote] = useState('');
 
-  async function runSearch(nextProcedure = procedure) {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setLocalResult(null);
+    setInspection(null);
+    searchPricing(procedure)
+      .then((result) => { if (!cancelled) setNationalResult(result); })
+      .catch((reason) => { if (!cancelled) { setNationalResult(null); setError(reason instanceof Error ? reason.message : 'Pricing search failed.'); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [procedure.code]);
+
+  async function runSearch() {
+    if (!location.trim()) { setLocalResult(null); setInspection(null); return; }
     setLoading(true);
     setError(null);
     setInspection(null);
-    try { setResult(await searchPricing(nextProcedure, location, radius)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Search failed.'); }
+    try { setLocalResult(await searchPricing(procedure, location, radius)); }
+    catch (reason) { setLocalResult(null); setError(reason instanceof Error ? reason.message : 'Market search failed.'); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { void runSearch(DEFAULT_PROCEDURE); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement)?.matches?.('input,textarea,select')) return;
-      const index = Number(event.key) - 1;
-      if (index >= 0 && index < MODES.length) setMode(MODES[index].id);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [setMode]);
-
-  const observations = useMemo<FlatObservation[]>(() => {
-    if (!result) return [];
-    return result.sources.flatMap((source) => source.observations.map((item) => ({ ...item, sourceName: source.sourceName, family: source.provenanceFamily })));
-  }, [result]);
-
-  const terrain = useMemo<TerrainObservation[]>(() => {
-    const benchmark = result?.combined.median || 1;
-    return observations.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && item.price > 0).map((item, index) => ({
-      id: `${item.sourceId}-${index}`,
-      latitude: item.latitude as number,
-      longitude: item.longitude as number,
-      price: item.price,
-      priceIndex: (item.price / benchmark) * 100,
-      source: item.sourceName,
-      sourceId: item.sourceId,
-      provider: item.providerName,
-      city: item.city,
-      state: item.state,
-      postalCode: item.postalCode,
-      paymentBasis: item.paymentBasis,
-    }));
-  }, [observations, result?.combined.median]);
-
-  const openLiveExample = () => {
-    setProcedure(FALLBACK_PROCEDURE);
-    setLocation('');
-    void runSearch(FALLBACK_PROCEDURE);
-  };
+  const result = localResult && localResult.combined.count > 0 ? localResult : nationalResult;
+  const nationalObservations = useMemo<FlatObservation[]>(() => (nationalResult?.sources || []).flatMap((source) => source.observations.map((item) => ({ ...item, sourceName: source.sourceName, family: source.provenanceFamily }))).filter((item) => Number.isFinite(item.price) && item.price > 0), [nationalResult]);
+  const localObservations = useMemo<FlatObservation[]>(() => (localResult?.sources || []).flatMap((source) => source.observations.map((item) => ({ ...item, sourceName: source.sourceName, family: source.provenanceFamily }))).filter((item) => Number.isFinite(item.price) && item.price > 0), [localResult]);
+  const decisionObservations = localResult && localResult.combined.count > 0 ? localObservations : nationalObservations;
+  const baseMedian = nationalResult?.combined.median || 1;
+  const terrain = useMemo<TerrainObservation[]>(() => nationalObservations.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)).map((item, index) => ({
+    id: `${item.sourceId}-${index}-${item.price}`,
+    latitude: item.latitude as number,
+    longitude: item.longitude as number,
+    price: item.price,
+    priceIndex: baseMedian ? (item.price / baseMedian) * 100 : 100,
+    source: item.sourceName,
+    sourceId: item.sourceId,
+    provider: item.providerName,
+    city: item.city,
+    state: item.state,
+    postalCode: item.postalCode,
+    paymentBasis: item.paymentBasis,
+  })), [nationalObservations, baseMedian]);
 
   return (
-    <main className={`pel2-root pel2-${mode}`}>
-      <div className="pel2-brand"><span>OM</span><div><strong>Price Intelligence</strong><small>Visual research lab</small></div></div>
-      <SearchCommand procedure={procedure} setProcedure={setProcedure} location={location} setLocation={setLocation} radius={radius} setRadius={setRadius} loading={loading} onSearch={() => void runSearch()} />
-      <ModeSwitcher mode={mode} onMode={setMode} />
-      <a className="pel2-classic" href="/vault">Primary workspace ↗</a>
-      {error && <div className="pel2-error">{error}</div>}
-      {loading && !result && <div className="pel2-loading"><i /><span>Reading live self-pay evidence</span></div>}
-      {result && result.combined.count === 0 && <CoverageVoid procedure={result.procedure} onExample={openLiveExample} />}
-      {result && result.combined.count > 0 && mode === 'atlas' && <AtlasView result={result} terrain={terrain} inspection={inspection} onInspect={setInspection} />}
-      {result && result.combined.count > 0 && mode === 'workbench' && <WorkbenchView result={result} observations={observations} />}
-      {result && result.combined.count > 0 && mode === 'canvas' && <CanvasView result={result} observations={observations} />}
-      {result && result.combined.count > 0 && mode === 'surface' && <SurfaceView result={result} terrain={terrain} metric={surfaceMetric} setMetric={setSurfaceMetric} inspection={inspection} onInspect={setInspection} />}
-      {result && result.combined.count > 0 && mode === 'constellation' && <ConstellationView result={result} observations={observations} />}
+    <main className={`pal-root lens-${lens}`}>
+      <header className="pal-topbar">
+        <div className="pal-brand"><span>OM</span><div><strong>Price Intelligence</strong><small>Network analyst workspace</small></div></div>
+        <SearchCommand procedure={procedure} onProcedure={setProcedure} location={location} onLocation={setLocation} radius={radius} onRadius={setRadius} loading={loading} onSearch={runSearch} />
+        <a className="pal-classic" href="/vault/classic">Classic ↗</a>
+      </header>
+      <LensNav lens={lens} onLens={setLens} />
+      {error && <div className="pal-error">{error}</div>}
+      {loading && !nationalResult ? <div className="pal-loading"><i /><b>Reading the self-pay evidence network</b></div> : result && result.combined.count > 0 ? (
+        <div className="pal-stage">
+          {lens === 'geography' && <GeographyLens result={result} terrain={terrain} inspection={inspection} onInspect={setInspection} />}
+          {lens === 'distribution' && <DistributionLens result={result} observations={decisionObservations} />}
+          {lens === 'confidence' && <ConfidenceLens result={result} observations={decisionObservations} />}
+          {lens === 'decision' && <DecisionLens result={result} observations={decisionObservations} quote={quote} onQuote={setQuote} usingLocal={Boolean(localResult && localResult.combined.count > 0)} />}
+          {lens === 'comparables' && nationalResult && <ComparableLens result={nationalResult} observations={nationalObservations} localResult={localResult && localResult.combined.count > 0 ? localResult : null} />}
+        </div>
+      ) : <CoverageVoid procedure={procedure} />}
     </main>
   );
 }
