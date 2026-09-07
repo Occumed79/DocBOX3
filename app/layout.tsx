@@ -21,18 +21,19 @@ import './styles/price-results.css';
 import './styles/price-report.css';
 import './styles/price-intelligence-v2.css';
 import './styles/price-experience-lab.css';
+import './styles/tremor-pricing.css';
 
 export const metadata: Metadata = {
   title: 'Price Intelligence | Occu-Med',
-  description: 'Self-pay healthcare price intelligence with geographic market exploration, source provenance, and multiple interactive visualization modes.',
+  description: 'Self-pay healthcare price intelligence for network sourcing and quote decisions.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#07111f',
-  colorScheme: 'dark',
+  themeColor: '#ffffff',
+  colorScheme: 'light dark',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
