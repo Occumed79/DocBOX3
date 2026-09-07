@@ -3,12 +3,10 @@ import { acceptSelfPayObservation, type PriceObservationInput } from '@/lib/pric
 type JsonObject = Record<string, unknown>;
 
 const MEDRATES_SEARCH_URL = 'https://medrates.fyi/api/public/v1/search';
-const EXPLICIT_CASH_FIELDS = [
-  'discounted_cash_price',
-  'cash_price',
-  'self_pay_price',
-  'selfpay_price',
-] as const;
+const EXPLICIT_CASH_FIELDS = ['discounted_cash_price', 'cash_price', 'self_pay_price', 'selfpay_price'] as const;
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const STALE_TTL_MS = 24 * 60 * 60 * 1000;
+const cache = new Map<string, { storedAt: number; rows: PriceObservationInput[] }>();
 
 function asObject(value: unknown): JsonObject | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : null;
@@ -61,22 +59,14 @@ function mergeContext(object: JsonObject, parent: TraversalContext): TraversalCo
   const location = asObject(object.location);
   const address = asObject(object.address);
   const candidates = [object, hospital, facility, provider, location, address].filter(Boolean) as JsonObject[];
-
   const firstText = (keys: string[]) => {
-    for (const candidate of candidates) {
-      const value = textFrom(candidate, keys);
-      if (value) return value;
-    }
+    for (const candidate of candidates) { const value = textFrom(candidate, keys); if (value) return value; }
     return undefined;
   };
   const firstCoordinate = (keys: string[]) => {
-    for (const candidate of candidates) {
-      const value = coordinateFrom(candidate, keys);
-      if (value !== undefined) return value;
-    }
+    for (const candidate of candidates) { const value = coordinateFrom(candidate, keys); if (value !== undefined) return value; }
     return undefined;
   };
-
   return {
     providerName: firstText(['display_name', 'hospital_name', 'facility_name', 'provider_name', 'name']) ?? parent.providerName,
     city: firstText(['city']) ?? parent.city,
@@ -100,97 +90,58 @@ function extractExplicitCashValue(object: JsonObject): { price: number; basis: '
   return null;
 }
 
-function walkForCashRecords(
-  value: unknown,
-  procedureCode: string,
-  procedureName: string,
-  inherited: TraversalContext,
-  output: PriceObservationInput[],
-  seen: Set<string>,
-) {
-  if (Array.isArray(value)) {
-    for (const item of value) walkForCashRecords(item, procedureCode, procedureName, inherited, output, seen);
-    return;
-  }
-
+function walkForCashRecords(value: unknown, procedureCode: string, procedureName: string, inherited: TraversalContext, output: PriceObservationInput[], seen: Set<string>) {
+  if (Array.isArray(value)) { for (const item of value) walkForCashRecords(item, procedureCode, procedureName, inherited, output, seen); return; }
   const object = asObject(value);
   if (!object) return;
   const context = mergeContext(object, inherited);
   const cash = extractExplicitCashValue(object);
-
   if (cash) {
     const signature = [context.providerName, context.city, context.state, procedureCode, cash.price].join('|');
     if (!seen.has(signature)) {
       seen.add(signature);
       const accepted = acceptSelfPayObservation({
-        sourceId: 'medrates',
-        procedureCode,
-        procedureName,
-        price: cash.price,
-        paymentBasis: cash.basis,
-        providerName: context.providerName,
-        city: context.city,
-        state: context.state,
-        postalCode: context.postalCode,
-        latitude: context.latitude,
-        longitude: context.longitude,
-        sourceUrl: context.sourceUrl,
+        sourceId: 'medrates', procedureCode, procedureName, price: cash.price, paymentBasis: cash.basis,
+        providerName: context.providerName, city: context.city, state: context.state, postalCode: context.postalCode,
+        latitude: context.latitude, longitude: context.longitude, sourceUrl: context.sourceUrl,
       });
       if (accepted) output.push(accepted);
     }
   }
-
-  for (const child of Object.values(object)) {
-    if (child && typeof child === 'object') {
-      walkForCashRecords(child, procedureCode, procedureName, context, output, seen);
-    }
-  }
+  for (const child of Object.values(object)) if (child && typeof child === 'object') walkForCashRecords(child, procedureCode, procedureName, context, output, seen);
 }
 
-export type MedRatesSearchInput = {
-  procedureCode: string;
-  procedureName: string;
-  location?: string;
-  latitude?: number;
-  longitude?: number;
-};
+export type MedRatesSearchInput = { procedureCode: string; procedureName: string; location?: string; latitude?: number; longitude?: number };
 
 export async function searchMedRatesCash(input: MedRatesSearchInput): Promise<PriceObservationInput[]> {
+  const key = [input.procedureCode, input.latitude?.toFixed(3), input.longitude?.toFixed(3), input.location || ''].join('|');
+  const cached = cache.get(key);
+  const age = cached ? Date.now() - cached.storedAt : Number.POSITIVE_INFINITY;
+  if (cached && age < CACHE_TTL_MS) return cached.rows;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
-
   try {
-    const body: Record<string, unknown> = {
-      query: `${input.procedureCode} ${input.procedureName}`,
-      codes_per_page: 5,
-      hospitals_per_code: 50,
-    };
-
-    // MedRates explicitly supports coordinate-scoped searches. Keep the free-text
-    // location out of the procedure query once real coordinates are available.
-    if (Number.isFinite(input.latitude) && Number.isFinite(input.longitude)) {
-      body.lat = input.latitude;
-      body.lng = input.longitude;
-    } else if (input.location) {
-      body.query = `${body.query} near ${input.location}`;
-    }
+    const body: Record<string, unknown> = { query: `${input.procedureCode} ${input.procedureName}`, codes_per_page: 5, hospitals_per_code: 50 };
+    if (Number.isFinite(input.latitude) && Number.isFinite(input.longitude)) { body.lat = input.latitude; body.lng = input.longitude; }
+    else if (input.location) body.query = `${body.query} near ${input.location}`;
 
     const response = await fetch(MEDRATES_SEARCH_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-      signal: controller.signal,
+      method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body), cache: 'no-store', signal: controller.signal,
     });
-
     if (!response.ok) {
-      throw new Error(`MedRates search failed with HTTP ${response.status}.`);
+      if (cached && age < STALE_TTL_MS && (response.status === 429 || response.status >= 500)) return cached.rows;
+      const retryAfter = response.headers.get('retry-after');
+      throw new Error(`MedRates cash API returned HTTP ${response.status}${retryAfter ? ` (retry after ${retryAfter}s)` : ''}.`);
     }
-
     const payload: unknown = await response.json();
     const observations: PriceObservationInput[] = [];
     walkForCashRecords(payload, input.procedureCode, input.procedureName, {}, observations, new Set());
+    cache.set(key, { storedAt: Date.now(), rows: observations });
     return observations;
+  } catch (error) {
+    if (cached && age < STALE_TTL_MS) return cached.rows;
+    throw error;
   } finally {
     clearTimeout(timeout);
   }

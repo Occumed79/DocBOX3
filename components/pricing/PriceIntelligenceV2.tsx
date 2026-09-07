@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import PriceMap from './PriceMap';
+import PriceTerrainMap, { type TerrainInspection, type TerrainMode, type TerrainObservation } from './PriceTerrainMap';
 import { PROCEDURES, searchProcedures, type ProcedureDefinition } from '@/lib/pricing/procedures';
-import { PRICING_SOURCES, type ProvenanceFamily } from '@/lib/pricing/source-registry';
-
-type Section = 'lookup' | 'map' | 'compare' | 'reports' | 'sources';
+import { PRICING_SOURCES, type ProvenanceFamily, type PricingSource } from '@/lib/pricing/source-registry';
 
 type Observation = {
   sourceId: string;
@@ -48,16 +46,21 @@ type SearchResult = {
   map?: { mappableObservationCount: number };
 };
 
-const NAV: Array<{ id: Section; label: string }> = [
-  { id: 'lookup', label: 'Market Lookup' },
-  { id: 'map', label: 'Price Map' },
-  { id: 'compare', label: 'Quote Analysis' },
-  { id: 'reports', label: 'Report' },
-  { id: 'sources', label: 'Sources' },
-];
+type Drawer = 'quote' | 'evidence' | 'report' | null;
+
+type HealthState = {
+  registry: PricingSource;
+  national?: SourceResult;
+  local?: SourceResult;
+  reachable: boolean;
+  procedure: boolean;
+  localEvidence: boolean | null;
+  qualifying: boolean;
+  detail: string;
+};
 
 const FAMILY_LABELS: Record<ProvenanceFamily, string> = {
-  hospital_mrf_cash: 'Hospital cash',
+  hospital_mrf_cash: 'Hospital MRF cash',
   provider_verified_quote: 'Provider verified',
   provider_published_cash: 'Provider published',
   direct_pay_marketplace: 'Direct-pay marketplace',
@@ -68,10 +71,8 @@ const FAMILY_LABELS: Record<ProvenanceFamily, string> = {
   unknown_cash: 'Other verified cash',
 };
 
-const liveSourceCount = PRICING_SOURCES.filter((source) => source.integrationState === 'live').length;
-const defaultProcedure = PROCEDURES.find((item) => item.code === 'D0330') || PROCEDURES[0];
-const mapDefaultProcedure = PROCEDURES.find((item) => item.code === '71046') || PROCEDURES[0];
-const quickCodes = ['D0330', 'D0150', '71046', '93000', '93015', '94010', '92557'];
+const defaultProcedure = PROCEDURES.find((item) => item.code === '71046') || PROCEDURES[0];
+const quickCodes = ['71046', '93000', '93015', '94010', '92557', 'D0330', 'D0150'];
 const quickProcedures = quickCodes.map((code) => PROCEDURES.find((item) => item.code === code)).filter(Boolean) as ProcedureDefinition[];
 
 function money(value: number | null | undefined) {
@@ -81,10 +82,6 @@ function money(value: number | null | undefined) {
 
 function familyLabel(value?: ProvenanceFamily) {
   return value ? FAMILY_LABELS[value] : 'Other verified cash';
-}
-
-function sourceName(sourceId: string) {
-  return PRICING_SOURCES.find((source) => source.id === sourceId)?.name || sourceId;
 }
 
 async function searchPricing(procedure: ProcedureDefinition, location?: string, radius?: number) {
@@ -100,252 +97,271 @@ async function searchPricing(procedure: ProcedureDefinition, location?: string, 
 function ProcedurePicker({ value, onChange }: { value: ProcedureDefinition; onChange: (procedure: ProcedureDefinition) => void }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const matches = useMemo(() => searchProcedures(query).slice(0, 12), [query]);
+  const matches = useMemo(() => searchProcedures(query).slice(0, 15), [query]);
   return (
-    <div className="px-procedure">
-      <label>Procedure</label>
-      <button type="button" className="px-control px-procedure-button" onClick={() => setOpen((state) => !state)}>
-        <span><strong>{value.name}</strong><small>{value.codeSystem} {value.code}</small></span><b>⌄</b>
+    <div className="kx-procedure">
+      <button type="button" className="kx-procedure-button" onClick={() => setOpen((state) => !state)}>
+        <span><small>PROCEDURE</small><strong>{value.name}</strong><em>{value.codeSystem} {value.code}</em></span><b>⌄</b>
       </button>
       {open && (
-        <div className="px-procedure-menu">
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search procedure or code" />
-          <div>
+        <div className="kx-procedure-menu">
+          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search CPT, CDT, HCPCS or service" />
+          <div className="kx-procedure-list">
             {matches.map((procedure) => (
               <button key={`${procedure.codeSystem}-${procedure.code}`} type="button" onClick={() => { onChange(procedure); setOpen(false); setQuery(''); }}>
                 <span><strong>{procedure.name}</strong><small>{procedure.category}</small></span><b>{procedure.code}</b>
               </button>
             ))}
           </div>
+          {!query && <div className="kx-quick-procedures">{quickProcedures.map((item) => <button type="button" key={item.code} onClick={() => { onChange(item); setOpen(false); }}>{item.code}</button>)}</div>}
         </div>
       )}
     </div>
   );
 }
 
-function QueryBar({ procedure, onProcedure, location, onLocation, radius, onRadius, button, onRun, loading }: {
-  procedure: ProcedureDefinition;
-  onProcedure: (value: ProcedureDefinition) => void;
-  location: string;
-  onLocation: (value: string) => void;
-  radius: number;
-  onRadius: (value: number) => void;
-  button: string;
-  onRun: () => void;
-  loading: boolean;
-}) {
-  return (
-    <div className="px-querybar">
-      <ProcedurePicker value={procedure} onChange={onProcedure} />
-      <label className="px-field"><span>Market</span><input className="px-control" value={location} onChange={(event) => onLocation(event.target.value)} placeholder="City, state or ZIP" /></label>
-      <label className="px-field"><span>Radius</span><select className="px-control" value={radius} onChange={(event) => onRadius(Number(event.target.value))}>{[25, 50, 75, 100].map((item) => <option value={item} key={item}>{item} mi</option>)}</select></label>
-      <button className="px-action" type="button" onClick={onRun} disabled={loading}>{loading ? 'Searching…' : button}</button>
-    </div>
-  );
+function SourceLamp({ active, label }: { active: boolean | null; label: string }) {
+  return <span className={`kx-lamp ${active === null ? 'na' : active ? 'yes' : 'no'}`} title={label}><i />{label}</span>;
 }
 
-function Summary({ result }: { result: SearchResult }) {
-  return (
-    <div className="px-summary-grid">
-      <div><span>Market median</span><strong>{money(result.combined.median)}</strong><small>provenance-balanced</small></div>
-      <div><span>Observed range</span><strong>{money(result.combined.low)}–{money(result.combined.high)}</strong><small>{result.combined.count} qualifying observations</small></div>
-      <div><span>Evidence families</span><strong>{result.benchmark?.provenanceFamilyCount || 0}</strong><small>independent evidence classes</small></div>
-      <div><span>Map coverage</span><strong>{result.map?.mappableObservationCount || 0}</strong><small>geocoded observations</small></div>
-    </div>
-  );
+function buildHealth(registry: PricingSource, nationalResult: SearchResult | null, localResult: SearchResult | null): HealthState {
+  const national = nationalResult?.sources.find((source) => source.sourceId === registry.id);
+  const local = localResult?.sources.find((source) => source.sourceId === registry.id);
+  const activeAdapter = registry.integrationState === 'live';
+  const responseSource = local || national;
+  const reachable = activeAdapter && Boolean(responseSource && responseSource.status !== 'error' && responseSource.status !== 'unconfigured');
+  const procedure = Boolean(national && national.status === 'ok' && (national.summary.count > 0 || national.summary.median !== null));
+  const localEvidence = localResult ? Boolean(local && local.status === 'ok' && (local.summary.count > 0 || local.summary.median !== null)) : null;
+  const qualifying = localResult ? Boolean(localEvidence && local?.headlineEligible !== false) : Boolean(procedure && national?.headlineEligible !== false);
+  const detail = registry.integrationState === 'registered' ? 'Registered — no deterministic first-party query path yet.'
+    : registry.integrationState === 'credential-required' ? 'Credential required before this source can contribute.'
+      : responseSource?.status === 'error' ? responseSource.error || 'Upstream query error.'
+        : localResult && procedure && !localEvidence ? 'Reachable and contains this procedure nationally, but no qualifying evidence in the strict local radius.'
+          : procedure ? 'Reachable and returned qualifying self-pay evidence for this procedure.'
+            : reachable ? 'Reachable, but no qualifying evidence for this procedure in the current query.'
+              : 'Awaiting source response.';
+  return { registry, national, local, reachable, procedure, localEvidence, qualifying, detail };
 }
 
-function FamilyRow({ result }: { result: SearchResult }) {
-  const families = result.benchmark?.familyMedians || [];
-  if (!families.length) return null;
-  return (
-    <div className="px-family-row">
-      {families.map((item) => <div key={item.family}><span>{familyLabel(item.family)}</span><strong>{money(item.median)}</strong><small>{item.sourceCount} source{item.sourceCount === 1 ? '' : 's'}</small></div>)}
-    </div>
-  );
-}
-
-function SourceEvidence({ result }: { result: SearchResult }) {
-  const rows = [...result.sources].sort((a, b) => {
-    const aHas = a.status === 'ok' ? 0 : 1;
-    const bHas = b.status === 'ok' ? 0 : 1;
-    return aHas - bHas || (a.evidenceRank || 999) - (b.evidenceRank || 999) || a.sourceName.localeCompare(b.sourceName);
-  });
-  return (
-    <div className="px-evidence-table">
-      <div className="px-table-head"><span>Source</span><span>Family</span><span>Median</span><span>Records</span><span>Status</span></div>
-      {rows.map((source) => (
-        <div className="px-table-row" key={source.sourceId}>
-          <span><strong>{source.sourceName}</strong>{source.evidenceReason && <small>{source.evidenceReason}</small>}</span>
-          <span>{familyLabel(source.provenanceFamily)}</span>
-          <span>{money(source.summary.median)}</span>
-          <span>{source.summary.count || source.observations.length}</span>
-          <span className={`px-status ${source.status}`}>{source.status === 'ok' ? source.headlineEligible === false ? 'supporting' : 'live data' : source.status}</span>
-        </div>
-      ))}
-    </div>
-  );
+function Metric({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return <div className="kx-metric"><span>{label}</span><strong>{value}</strong><small>{sub}</small></div>;
 }
 
 export default function PriceIntelligenceV2() {
-  const [section, setSection] = useState<Section>('lookup');
   const [procedure, setProcedure] = useState(defaultProcedure);
-  const [mapProcedure, setMapProcedure] = useState(mapDefaultProcedure);
   const [location, setLocation] = useState('');
   const [radius, setRadius] = useState(50);
-  const [lookup, setLookup] = useState<SearchResult | null>(null);
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [mapResult, setMapResult] = useState<SearchResult | null>(null);
-  const [mapLoading, setMapLoading] = useState(false);
-  const [mapSource, setMapSource] = useState('all');
-  const [mapMetric, setMapMetric] = useState<'index' | 'cash'>('cash');
+  const [nationalResult, setNationalResult] = useState<SearchResult | null>(null);
+  const [nationalLoading, setNationalLoading] = useState(true);
+  const [nationalError, setNationalError] = useState<string | null>(null);
+  const [localResult, setLocalResult] = useState<SearchResult | null>(null);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [mode, setMode] = useState<TerrainMode>('price');
+  const [threeD, setThreeD] = useState(true);
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [drawer, setDrawer] = useState<Drawer>(null);
   const [quote, setQuote] = useState('');
-  const [compareResult, setCompareResult] = useState<SearchResult | null>(null);
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [compareError, setCompareError] = useState<string | null>(null);
-
-  async function runLookup() {
-    setLookupLoading(true); setLookupError(null);
-    try { setLookup(await searchPricing(procedure, location, radius)); }
-    catch (error) { setLookup(null); setLookupError(error instanceof Error ? error.message : 'Search failed.'); }
-    finally { setLookupLoading(false); }
-  }
-
-  async function runCompare() {
-    const price = Number(quote.replace(/[$,]/g, ''));
-    if (!Number.isFinite(price) || price <= 0) { setCompareError('Enter a valid provider quote.'); return; }
-    if (!location.trim()) { setCompareError('Enter the provider city, state, or ZIP.'); return; }
-    setCompareLoading(true); setCompareError(null);
-    try { setCompareResult(await searchPricing(procedure, location, radius)); }
-    catch (error) { setCompareResult(null); setCompareError(error instanceof Error ? error.message : 'Quote analysis failed.'); }
-    finally { setCompareLoading(false); }
-  }
+  const [inspection, setInspection] = useState<TerrainInspection | null>(null);
 
   useEffect(() => {
-    if (section !== 'map') return;
     let cancelled = false;
-    setMapLoading(true);
-    searchPricing(mapProcedure)
-      .then((result) => { if (!cancelled) setMapResult(result); })
-      .catch(() => { if (!cancelled) setMapResult(null); })
-      .finally(() => { if (!cancelled) setMapLoading(false); });
+    setNationalLoading(true);
+    setNationalError(null);
+    setLocalResult(null);
+    setSourceFilter('all');
+    setInspection(null);
+    searchPricing(procedure)
+      .then((result) => { if (!cancelled) setNationalResult(result); })
+      .catch((error) => { if (!cancelled) { setNationalResult(null); setNationalError(error instanceof Error ? error.message : 'National map search failed.'); } })
+      .finally(() => { if (!cancelled) setNationalLoading(false); });
     return () => { cancelled = true; };
-  }, [section, mapProcedure]);
+  }, [procedure.code]);
 
-  const mapMedian = mapResult?.combined.median || null;
-  const mapObservations = useMemo(() => {
-    if (!mapResult || !mapMedian) return [];
-    return mapResult.sources
-      .filter((source) => mapSource === 'all' || source.sourceId === mapSource)
-      .flatMap((source) => source.observations)
-      .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
-      .map((item, index) => ({ id: `${item.sourceId}-${index}`, latitude: item.latitude as number, longitude: item.longitude as number, price: item.price, priceIndex: (item.price / mapMedian) * 100, source: sourceName(item.sourceId), provider: item.providerName, city: item.city, state: item.state }));
-  }, [mapResult, mapMedian, mapSource]);
+  async function runMarketSearch() {
+    if (!location.trim()) { setLocalError('Enter a city, state, or ZIP to calculate a strict local benchmark.'); return; }
+    setLocalLoading(true);
+    setLocalError(null);
+    setInspection(null);
+    try { setLocalResult(await searchPricing(procedure, location, radius)); }
+    catch (error) { setLocalResult(null); setLocalError(error instanceof Error ? error.message : 'Local market search failed.'); }
+    finally { setLocalLoading(false); }
+  }
 
+  const nationalMedian = nationalResult?.combined.median || null;
+  const terrainObservations = useMemo<TerrainObservation[]>(() => {
+    if (!nationalResult) return [];
+    const baseMedian = nationalMedian || 1;
+    return nationalResult.sources
+      .filter((source) => sourceFilter === 'all' || source.sourceId === sourceFilter)
+      .flatMap((source) => source.observations.map((item, index) => ({
+        id: `${source.sourceId}-${index}-${item.price}`,
+        latitude: item.latitude as number,
+        longitude: item.longitude as number,
+        price: item.price,
+        priceIndex: baseMedian ? (item.price / baseMedian) * 100 : 100,
+        source: source.sourceName,
+        sourceId: source.sourceId,
+        provider: item.providerName,
+        city: item.city,
+        state: item.state,
+        postalCode: item.postalCode,
+        paymentBasis: item.paymentBasis,
+      })))
+      .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && item.price > 0);
+  }, [nationalResult, nationalMedian, sourceFilter]);
+
+  const sourceOptions = useMemo(() => (nationalResult?.sources || [])
+    .filter((source) => source.observations.some((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)))
+    .sort((a, b) => b.observations.length - a.observations.length), [nationalResult]);
+
+  const healthRows = useMemo(() => PRICING_SOURCES.map((source) => buildHealth(source, nationalResult, localResult)), [nationalResult, localResult]);
+  const liveRows = healthRows.filter((row) => row.registry.integrationState === 'live');
+  const reachableCount = liveRows.filter((row) => row.reachable).length;
+  const procedureCount = liveRows.filter((row) => row.procedure).length;
+  const localEvidenceCount = localResult ? liveRows.filter((row) => row.localEvidence).length : 0;
+  const errorCount = liveRows.filter((row) => (row.local || row.national)?.status === 'error').length;
+
+  const localMedian = localResult?.combined.median || null;
   const quoteNumber = Number(quote.replace(/[$,]/g, ''));
-  const compareMedian = compareResult?.combined.median || null;
-  const variance = compareMedian && Number.isFinite(quoteNumber) ? ((quoteNumber - compareMedian) / compareMedian) * 100 : null;
-  const assessment = variance === null ? null : variance <= 10 ? 'Within market' : variance <= 25 ? 'Moderately above market' : variance <= 50 ? 'High' : 'Very high';
+  const variance = localMedian && Number.isFinite(quoteNumber) && quoteNumber > 0 ? ((quoteNumber - localMedian) / localMedian) * 100 : null;
+  const quoteAssessment = variance === null ? null : variance <= 10 ? 'Within market' : variance <= 25 ? 'Moderately above market' : variance <= 50 ? 'High' : 'Very high';
+  const strictMarketName = localResult?.resolvedLocation?.displayName || localResult?.location || null;
+
+  const inspectorTitle = inspection?.title || (strictMarketName ? strictMarketName : 'National self-pay landscape');
+  const inspectorMedian = inspection?.median ?? localMedian ?? nationalMedian;
+  const inspectorCount = inspection?.count ?? localResult?.combined.count ?? nationalResult?.combined.count ?? 0;
+  const inspectorLow = inspection?.low ?? localResult?.combined.low ?? nationalResult?.combined.low ?? null;
+  const inspectorHigh = inspection?.high ?? localResult?.combined.high ?? nationalResult?.combined.high ?? null;
+
+  const modeLabel = mode === 'price' ? 'PRICE TERRAIN' : mode === 'density' ? 'MARKET DENSITY' : 'PRICE SPREAD';
+  const modeDescription = mode === 'price' ? 'Height = median price index · color = price index'
+    : mode === 'density' ? 'Height = observation count · color = median price index'
+      : 'Height + color = interquartile price-index spread';
 
   return (
-    <main className="px-app">
-      <header className="px-header">
-        <div className="px-brand"><span>OM</span><div><strong>Price Intelligence</strong><small>Self-pay pricing workspace</small></div></div>
-        <nav>{NAV.map((item) => <button type="button" key={item.id} className={section === item.id ? 'active' : ''} onClick={() => setSection(item.id)}>{item.label}</button>)}</nav>
-        <div className="px-live"><i />{liveSourceCount} live sources</div>
+    <main className="kx-app">
+      <div className="kx-map-shell">
+        <PriceTerrainMap
+          observations={terrainObservations}
+          mode={mode}
+          threeD={threeD}
+          focus={localResult?.resolvedLocation ? { latitude: localResult.resolvedLocation.latitude, longitude: localResult.resolvedLocation.longitude, displayName: strictMarketName || undefined } : null}
+          radiusMiles={localResult?.radiusMiles || radius}
+          onInspect={setInspection}
+        />
+      </div>
+
+      <header className="kx-topbar">
+        <div className="kx-brand"><span>OM</span><div><strong>Price Intelligence</strong><small>Spatial self-pay market engine</small></div></div>
+        <div className="kx-source-pulse">
+          <span><i className={errorCount ? 'warn' : ''} />{liveRows.length} integrations</span>
+          <span>{reachableCount} reachable</span>
+          <span>{procedureCount} procedure</span>
+          {localResult && <span>{localEvidenceCount} local</span>}
+        </div>
+        <div className="kx-actions">
+          <button type="button" onClick={() => setDrawer(drawer === 'quote' ? null : 'quote')}>Quote</button>
+          <button type="button" onClick={() => setDrawer(drawer === 'evidence' ? null : 'evidence')}>Evidence</button>
+          <button type="button" onClick={() => setDrawer(drawer === 'report' ? null : 'report')}>Brief</button>
+        </div>
       </header>
 
-      <div className="px-shell">
-        {section === 'lookup' && (
-          <section className="px-screen">
-            <div className="px-screen-head"><div><span>MARKET LOOKUP</span><h1>Self-pay market price</h1></div><p>Search an exact CPT, CDT or HCPCS code against eligible cash-price evidence. Insurance, Medicare, gross charges and unknown payment bases never enter the benchmark.</p></div>
-            <QueryBar procedure={procedure} onProcedure={setProcedure} location={location} onLocation={setLocation} radius={radius} onRadius={setRadius} button="Search market" onRun={runLookup} loading={lookupLoading} />
-            {lookupError && <div className="px-alert">{lookupError}</div>}
-            {!lookup && !lookupLoading && (
-              <div className="px-start-state">
-                <div><span>QUICK START</span><h2>Pick a common Occu-Med service</h2><p>Or enter any valid CPT, CDT or HCPCS code above.</p></div>
-                <div className="px-quick-grid">{quickProcedures.map((item) => <button type="button" key={item.code} onClick={() => setProcedure(item)}><b>{item.code}</b><span>{item.name}</span></button>)}</div>
-                <div className="px-start-metrics"><div><strong>{liveSourceCount}</strong><span>live sources</span></div><div><strong>7</strong><span>provenance families</span></div><div><strong>6</strong><span>allowed cash bases</span></div></div>
-              </div>
-            )}
-            {lookup && (
-              <div className="px-results">
-                <div className="px-result-title"><div><span>RESULT</span><h2>{lookup.procedure.name}</h2><p>{lookup.resolvedLocation?.displayName || lookup.location || 'National'}{lookup.location ? ` · ${lookup.radiusMiles || radius} mile radius` : ''}</p></div><div className="px-result-price"><span>MARKET MEDIAN</span><strong>{money(lookup.combined.median)}</strong></div></div>
-                <Summary result={lookup} />
-                <FamilyRow result={lookup} />
-                <div className="px-section-label"><span>Source evidence</span><b>{lookup.sources.filter((item) => item.status === 'ok').length} sources returned qualifying data</b></div>
-                <SourceEvidence result={lookup} />
-              </div>
-            )}
-          </section>
-        )}
+      <section className="kx-query-dock">
+        <ProcedurePicker value={procedure} onChange={setProcedure} />
+        <label className="kx-location"><small>STRICT MARKET</small><input value={location} onChange={(event) => setLocation(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') runMarketSearch(); }} placeholder="City, state or ZIP" /></label>
+        <label className="kx-radius"><small>RADIUS</small><select value={radius} onChange={(event) => setRadius(Number(event.target.value))}>{[25, 50, 75, 100, 150].map((item) => <option value={item} key={item}>{item} mi</option>)}</select></label>
+        <button className="kx-search" type="button" onClick={runMarketSearch} disabled={localLoading}>{localLoading ? 'Resolving…' : 'Analyze market'}</button>
+      </section>
 
-        {section === 'map' && (
-          <section className="px-screen px-map-screen">
-            <div className="px-map-controls">
-              <div><span>PRICE MAP</span><h1>{mapProcedure.name}</h1><p>{mapLoading ? 'Loading…' : `${mapObservations.length} mappable self-pay observations`}</p></div>
-              <ProcedurePicker value={mapProcedure} onChange={setMapProcedure} />
-              <label className="px-field"><span>Source</span><select className="px-control" value={mapSource} onChange={(event) => setMapSource(event.target.value)}><option value="all">All live sources</option>{PRICING_SOURCES.filter((item) => item.integrationState === 'live').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-              <label className="px-field"><span>Metric</span><select className="px-control" value={mapMetric} onChange={(event) => setMapMetric(event.target.value === 'index' ? 'index' : 'cash')}><option value="cash">Observed cash price</option><option value="index">Relative price index</option></select></label>
-            </div>
-            <div className="px-map-frame"><PriceMap procedure={mapProcedure} observations={mapObservations} metric={mapMetric} /></div>
-            {!mapLoading && mapResult && mapObservations.length === 0 && <div className="px-map-suggest"><span>No geocoded observations for this procedure.</span><button type="button" onClick={() => setMapProcedure(mapDefaultProcedure)}>Switch to Chest X-ray 71046</button></div>}
-          </section>
-        )}
+      <aside className="kx-mode-rail">
+        <span>MAP MODE</span>
+        <button type="button" className={mode === 'price' ? 'active' : ''} onClick={() => setMode('price')}><i className="terrain" /><b>Price</b><small>terrain</small></button>
+        <button type="button" className={mode === 'density' ? 'active' : ''} onClick={() => setMode('density')}><i className="density" /><b>Density</b><small>volume</small></button>
+        <button type="button" className={mode === 'spread' ? 'active' : ''} onClick={() => setMode('spread')}><i className="spread" /><b>Spread</b><small>variance</small></button>
+        <div className="kx-rail-rule" />
+        <button type="button" className={threeD ? 'active' : ''} onClick={() => setThreeD((value) => !value)}><i className="cube" /><b>{threeD ? '3D' : '2D'}</b><small>view</small></button>
+      </aside>
 
-        {section === 'compare' && (
-          <section className="px-screen">
-            <div className="px-screen-head"><div><span>QUOTE ANALYSIS</span><h1>Compare a provider quote</h1></div><p>Use the provider's actual location and cash quote. The result shows the market median, dollar variance, percentage variance, and underlying evidence.</p></div>
-            <div className="px-compare-layout">
-              <div className="px-compare-form">
-                <ProcedurePicker value={procedure} onChange={setProcedure} />
-                <label className="px-field"><span>Provider location</span><input className="px-control" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, state or ZIP" /></label>
-                <div className="px-compare-split"><label className="px-field"><span>Radius</span><select className="px-control" value={radius} onChange={(event) => setRadius(Number(event.target.value))}>{[25,50,75,100].map((item) => <option key={item} value={item}>{item} mi</option>)}</select></label><label className="px-field"><span>Provider quote</span><div className="px-money"><b>$</b><input value={quote} onChange={(event) => setQuote(event.target.value)} placeholder="0.00" /></div></label></div>
-                <button className="px-action wide" type="button" onClick={runCompare} disabled={compareLoading}>{compareLoading ? 'Analyzing…' : 'Analyze quote'}</button>
-                {compareError && <div className="px-alert">{compareError}</div>}
-              </div>
-              <div className="px-decision-panel">
-                {compareResult && compareMedian && variance !== null ? <>
-                  <span>MARKET DECISION</span><h2>{assessment}</h2>
-                  <div className="px-decision-price"><div><span>Quote</span><strong>{money(quoteNumber)}</strong></div><div><span>Market</span><strong>{money(compareMedian)}</strong></div><div><span>Variance</span><strong>{variance >= 0 ? '+' : ''}{variance.toFixed(1)}%</strong></div></div>
-                  <p>{compareResult.combined.count} qualifying observations across {compareResult.benchmark?.provenanceFamilyCount || 0} independent evidence families.</p>
-                  <button className="px-text-button" type="button" onClick={() => setSection('reports')}>Open report →</button>
-                </> : <><span>READY</span><h2>Enter a quote to evaluate it.</h2><p>The comparison does not use Medicare, insurance allowed amounts, claims averages, or chargemaster prices.</p></>}
-              </div>
-            </div>
-            {compareResult && <><FamilyRow result={compareResult} /><div className="px-section-label"><span>Evidence used</span></div><SourceEvidence result={compareResult} /></>}
-          </section>
-        )}
+      <aside className="kx-inspector">
+        <div className="kx-inspector-kicker"><span>{inspection ? inspection.kind.toUpperCase() : localResult ? 'STRICT MARKET' : 'NATIONAL VIEW'}</span><button type="button" onClick={() => setInspection(null)} disabled={!inspection}>×</button></div>
+        <h2>{inspectorTitle}</h2>
+        <div className="kx-inspector-price"><strong>{money(inspectorMedian)}</strong><span>{inspection?.priceIndex ? `INDEX ${Math.round(inspection.priceIndex)}` : localMedian ? 'LOCAL MEDIAN' : 'NATIONAL MEDIAN'}</span></div>
+        <div className="kx-inspector-grid">
+          <Metric label="LOW" value={money(inspectorLow)} sub="observed" />
+          <Metric label="HIGH" value={money(inspectorHigh)} sub="observed" />
+          <Metric label="OBS" value={inspectorCount.toLocaleString()} sub="qualifying" />
+          <Metric label="FAMILIES" value={String(localResult?.benchmark?.provenanceFamilyCount ?? nationalResult?.benchmark?.provenanceFamilyCount ?? 0)} sub="independent" />
+        </div>
+        {inspection?.sources?.length ? <div className="kx-inspector-sources"><span>SOURCES IN CELL</span>{inspection.sources.slice(0, 6).map((source) => <b key={source}>{source}</b>)}</div> : null}
+        {!inspection && localResult && !localMedian && <div className="kx-no-local"><b>No strict local benchmark.</b><span>The national terrain remains visible. No national or out-of-radius price was substituted into the local result.</span></div>}
+        {!inspection && !localResult && <div className="kx-inspector-help"><b>Search a market or click the terrain.</b><span>The map stays national; a market search only adds the strict radius and local evidence layer.</span></div>}
+      </aside>
 
-        {section === 'reports' && (
-          <section className="px-screen">
-            <div className="px-screen-head"><div><span>LEADERSHIP REPORT</span><h1>Provider pricing comparison</h1></div><p>One-page decision brief built from the quote analysis and the qualifying self-pay evidence behind it.</p></div>
-            {!compareResult || !compareMedian || variance === null ? (
-              <div className="px-empty-report"><div><span>NO REPORT YET</span><h2>Run a quote analysis first.</h2><p>The completed report will include the provider quote, market median, variance, evidence-family breakdown, and source-level support.</p><button className="px-action" type="button" onClick={() => setSection('compare')}>Go to quote analysis</button></div></div>
-            ) : (
-              <article className="px-report" id="pricing-report">
-                <header><div><span>SELF-PAY PRICING ANALYSIS</span><h2>{procedure.name}</h2><p>{procedure.codeSystem} {procedure.code} · {compareResult.resolvedLocation?.displayName || location} · {radius} mi</p></div><b>OCCU-MED<br />PRICE INTELLIGENCE</b></header>
-                <section className="px-report-finding"><span>FINDING</span><h3>{assessment}</h3><p>The provider quote of {money(quoteNumber)} is {Math.abs(variance).toFixed(1)}% {variance >= 0 ? 'above' : 'below'} the provenance-balanced self-pay median of {money(compareMedian)}.</p></section>
-                <div className="px-report-metrics"><div><span>Provider quote</span><strong>{money(quoteNumber)}</strong></div><div><span>Market median</span><strong>{money(compareMedian)}</strong></div><div><span>Variance</span><strong>{variance >= 0 ? '+' : ''}{variance.toFixed(1)}%</strong></div><div><span>Observations</span><strong>{compareResult.combined.count}</strong></div></div>
-                <section><h4>Independent evidence families</h4><FamilyRow result={compareResult} /></section>
-                <section><h4>Source evidence</h4><SourceEvidence result={compareResult} /></section>
-                <footer><span>Self-pay only · Medicare, insurance, claims, gross charges and unknown payment bases excluded.</span><button type="button" onClick={() => window.print()}>Print / Save PDF</button></footer>
-              </article>
-            )}
-          </section>
-        )}
-
-        {section === 'sources' && (
-          <section className="px-screen">
-            <div className="px-screen-head"><div><span>SOURCE DIRECTORY</span><h1>Pricing evidence sources</h1></div><p>Live sources are queryable now. Registered sources stay visible but contribute zero until a deterministic cash-price observation path exists.</p></div>
-            <div className="px-source-directory">
-              <div className="px-source-head"><span>Source</span><span>Evidence family</span><span>Coverage / use</span><span>State</span></div>
-              {PRICING_SOURCES.map((source) => <div className="px-source-row" key={source.id}><span><strong>{source.name}</strong><small>{source.category}</small></span><span>{familyLabel(source.provenanceFamily)}</span><span>{source.occumedRelevance || source.coverage}</span><span className={`px-source-state ${source.integrationState}`}>{source.integrationState === 'credential-required' ? 'credential' : source.integrationState}</span></div>)}
-            </div>
-          </section>
-        )}
+      <div className="kx-layer-bar">
+        <div><span>{modeLabel}</span><small>{modeDescription}</small></div>
+        <label><span>SOURCE LAYER</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option value="all">All qualifying sources</option>{sourceOptions.map((source) => <option key={source.sourceId} value={source.sourceId}>{source.sourceName} · {source.observations.length.toLocaleString()}</option>)}</select></label>
+        <div className="kx-map-count"><strong>{terrainObservations.length.toLocaleString()}</strong><span>mapped observations</span></div>
       </div>
+
+      {(nationalLoading || nationalError || localError) && <div className={`kx-toast ${nationalError || localError ? 'error' : ''}`}>{nationalLoading ? 'Loading national self-pay terrain…' : nationalError || localError}</div>}
+
+      {drawer && <button aria-label="Close drawer" className="kx-drawer-scrim" type="button" onClick={() => setDrawer(null)} />}
+
+      <aside className={`kx-drawer ${drawer ? 'open' : ''} ${drawer === 'evidence' ? 'wide' : ''}`}>
+        <div className="kx-drawer-head"><div><span>{drawer === 'quote' ? 'QUOTE ANALYZER' : drawer === 'evidence' ? 'SOURCE HEALTH' : 'LEADERSHIP BRIEF'}</span><h2>{drawer === 'quote' ? 'Compare the actual provider fee' : drawer === 'evidence' ? 'Know exactly what is working' : 'Decision-ready market evidence'}</h2></div><button type="button" onClick={() => setDrawer(null)}>×</button></div>
+
+        {drawer === 'quote' && (
+          <div className="kx-quote-drawer">
+            <div className="kx-drawer-note">Quote analysis only uses the strict local result. National terrain is visual context and never substitutes for missing local evidence.</div>
+            <label><span>Provider location</span><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, state or ZIP" /></label>
+            <div className="kx-quote-row"><label><span>Radius</span><select value={radius} onChange={(event) => setRadius(Number(event.target.value))}>{[25, 50, 75, 100, 150].map((item) => <option value={item} key={item}>{item} miles</option>)}</select></label><label><span>Provider quote</span><div className="kx-money"><b>$</b><input inputMode="decimal" value={quote} onChange={(event) => setQuote(event.target.value)} placeholder="0.00" /></div></label></div>
+            <button className="kx-primary" type="button" onClick={runMarketSearch} disabled={localLoading}>{localLoading ? 'Analyzing…' : localResult ? 'Refresh local benchmark' : 'Run local benchmark'}</button>
+            {localResult && localMedian ? (
+              <div className="kx-quote-result">
+                <div><span>PROVIDER QUOTE</span><strong>{quoteNumber > 0 ? money(quoteNumber) : '—'}</strong></div>
+                <div><span>LOCAL MEDIAN</span><strong>{money(localMedian)}</strong></div>
+                <div><span>VARIANCE</span><strong>{variance === null ? '—' : `${variance >= 0 ? '+' : ''}${variance.toFixed(1)}%`}</strong></div>
+                <section><span>MARKET INTERPRETATION</span><h3>{quoteAssessment || 'Enter a provider quote'}</h3><p>{localResult.combined.count} deduplicated observations · {localResult.benchmark?.provenanceFamilyCount || 0} provenance families · {localResult.radiusMiles} mile strict radius.</p></section>
+              </div>
+            ) : localResult ? <div className="kx-no-local"><b>No qualifying local benchmark.</b><span>Quote classification is intentionally withheld.</span></div> : null}
+          </div>
+        )}
+
+        {drawer === 'evidence' && (
+          <div className="kx-health">
+            <div className="kx-health-summary"><div><strong>{liveRows.length}</strong><span>active integrations</span></div><div><strong>{reachableCount}</strong><span>reachable</span></div><div><strong>{procedureCount}</strong><span>contain procedure</span></div><div><strong>{localResult ? localEvidenceCount : '—'}</strong><span>local evidence</span></div></div>
+            <div className="kx-health-head"><span>Source</span><span>Connected</span><span>Procedure</span><span>Local</span><span>Qualifying</span></div>
+            <div className="kx-health-list">
+              {healthRows.map((row) => (
+                <article key={row.registry.id} className={row.registry.integrationState !== 'live' ? 'inactive' : ''}>
+                  <div><strong>{row.registry.name}</strong><small>{familyLabel(row.registry.provenanceFamily)}</small><em>{row.detail}</em></div>
+                  <SourceLamp active={row.registry.integrationState === 'live' ? row.reachable : null} label={row.registry.integrationState === 'live' ? row.reachable ? 'YES' : 'NO' : 'N/A'} />
+                  <SourceLamp active={row.registry.integrationState === 'live' ? row.procedure : null} label={row.registry.integrationState === 'live' ? row.procedure ? 'YES' : 'NO' : 'N/A'} />
+                  <SourceLamp active={row.registry.integrationState === 'live' ? row.localEvidence : null} label={row.registry.integrationState === 'live' && localResult ? row.localEvidence ? 'YES' : 'NO' : '—'} />
+                  <SourceLamp active={row.registry.integrationState === 'live' ? row.qualifying : null} label={row.registry.integrationState === 'live' ? row.qualifying ? 'YES' : 'NO' : 'N/A'} />
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {drawer === 'report' && (
+          <div className="kx-report-wrap">
+            {localResult && localMedian && quoteNumber > 0 && variance !== null ? (
+              <article className="kx-report" id="kx-report">
+                <header><span>OCCU-MED · SELF-PAY PRICING INTELLIGENCE</span><h2>Provider Pricing Comparison</h2><p>{procedure.name} · {procedure.codeSystem} {procedure.code}</p></header>
+                <section className="kx-report-finding"><span>EXECUTIVE FINDING</span><h3>{quoteAssessment}</h3><p>The provider quote of {money(quoteNumber)} is {Math.abs(variance).toFixed(1)}% {variance >= 0 ? 'above' : 'below'} the provenance-balanced local self-pay median of {money(localMedian)}.</p></section>
+                <div className="kx-report-metrics"><Metric label="QUOTE" value={money(quoteNumber)} sub="provider fee" /><Metric label="MEDIAN" value={money(localMedian)} sub="local self-pay" /><Metric label="OBS" value={localResult.combined.count.toLocaleString()} sub="deduplicated" /><Metric label="FAMILIES" value={String(localResult.benchmark?.provenanceFamilyCount || 0)} sub="independent" /></div>
+                <section><h4>Market</h4><p>{strictMarketName} · {localResult.radiusMiles} mile strict radius.</p></section>
+                <section><h4>Evidence families</h4><div className="kx-report-families">{(localResult.benchmark?.familyMedians || []).map((item) => <div key={item.family}><span>{familyLabel(item.family)}</span><b>{money(item.median)}</b><small>{item.sourceCount} source{item.sourceCount === 1 ? '' : 's'}</small></div>)}</div></section>
+                <section><h4>Method</h4><p>Only explicit cash, self-pay, discounted-cash, uninsured direct-pay and marketplace-cash observations qualify. Medicare, Medicaid, negotiated insurance, allowed amounts, claims averages, gross charges, chargemaster values and unknown payment bases are excluded. The headline median is balanced by independent provenance family so duplicate hospital-MRF aggregators cannot multiply their influence.</p></section>
+              </article>
+            ) : <div className="kx-report-empty"><b>Build the brief from a real quote.</b><span>Run a strict local market search and enter the provider's quoted fee. Empty templates are not presented as reports.</span><button type="button" className="kx-primary" onClick={() => setDrawer('quote')}>Open quote analyzer</button></div>}
+            {localResult && localMedian && quoteNumber > 0 && <button className="kx-primary" type="button" onClick={() => window.print()}>Print / Save PDF</button>}
+          </div>
+        )}
+      </aside>
     </main>
   );
 }
