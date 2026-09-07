@@ -79,8 +79,8 @@ function money(value: number | null | undefined) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 }
 
-function familyLabel(value: ProvenanceFamily) {
-  return FAMILY_LABELS[value] || value;
+function familyLabel(value?: ProvenanceFamily) {
+  return value ? FAMILY_LABELS[value] : 'Other verified cash';
 }
 
 function sourceName(sourceId: string) {
