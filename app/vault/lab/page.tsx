@@ -1,5 +1,5 @@
-import PriceExperienceLab from '@/components/pricing/PriceExperienceLab';
+import TremorPricingDashboard from '@/components/pricing/TremorPricingDashboard';
 
 export default function PricingExperienceLabPage() {
-  return <PriceExperienceLab />;
+  return <TremorPricingDashboard />;
 }
