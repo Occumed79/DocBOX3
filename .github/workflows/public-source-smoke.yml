@@ -2,9 +2,9 @@ name: Public cash-source smoke
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches:
-      - feature/self-pay-price-intelligence
+      - main
     paths:
       - '.github/workflows/public-source-smoke.yml'
       - 'scripts/public-source-smoke.mjs'
@@ -12,6 +12,24 @@ on:
       - 'lib/pricing/adapters/**'
       - 'lib/pricing/source-registry.ts'
       - 'app/api/pricing/search/route.ts'
+      - 'components/pricing/**'
+      - 'app/styles/price-intelligence-v2.css'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches:
+      - main
+      - feature/self-pay-price-intelligence
+      - deckgl-price-terrain
+    paths:
+      - '.github/workflows/public-source-smoke.yml'
+      - 'scripts/public-source-smoke.mjs'
+      - 'scripts/verify-pricing-integrity.mjs'
+      - 'lib/pricing/adapters/**'
+      - 'lib/pricing/source-registry.ts'
+      - 'app/api/pricing/search/route.ts'
+      - 'components/pricing/**'
+      - 'app/styles/price-intelligence-v2.css'
       - 'package.json'
       - 'package-lock.json'
 
