@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/public-source-smoke.yml'
       - 'scripts/public-source-smoke.mjs'
+      - 'scripts/verify-pricing-integrity.mjs'
       - 'lib/pricing/adapters/**'
       - 'lib/pricing/source-registry.ts'
       - 'app/api/pricing/search/route.ts'
