@@ -1,5 +1,5 @@
-import PriceIntelligenceApp from '@/components/pricing/PriceIntelligenceApp';
+import PriceIntelligenceV2 from '@/components/pricing/PriceIntelligenceV2';
 
 export default function VaultPage() {
-  return <PriceIntelligenceApp />;
+  return <PriceIntelligenceV2 />;
 }
