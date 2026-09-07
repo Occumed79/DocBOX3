@@ -20,17 +20,18 @@ import './styles/price-intelligence.css';
 import './styles/price-results.css';
 import './styles/price-report.css';
 import './styles/price-intelligence-v2.css';
+import './styles/price-experience-lab.css';
 
 export const metadata: Metadata = {
-  title: 'DocBox | Occu-Med',
-  description: 'Occu-Med DocBox — a luminous visual workspace for storing, previewing, organizing, and securely sharing documents.',
+  title: 'Price Intelligence | Occu-Med',
+  description: 'Self-pay healthcare price intelligence with geographic market exploration, source provenance, and multiple interactive visualization modes.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#415881',
+  themeColor: '#07111f',
   colorScheme: 'dark',
 };
 
