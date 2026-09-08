@@ -6,15 +6,18 @@ const required = [
   'components/data-studio/DataStudioPro.tsx',
   'components/data-studio/AdvancedVisualLab.tsx',
   'components/data-studio/StorytellingStudio.tsx',
+  'components/data-studio/SpatialVisualLab.tsx',
   'lib/data-studio/datawrapper-model.ts',
   'app/styles/data-studio-pro.css',
   'app/styles/advanced-visual-lab.css',
   'app/styles/storytelling-studio.css',
   'app/styles/cyber-visual-lab.css',
+  'app/styles/spatial-visual-lab.css',
   'app/vault/page.tsx',
   'app/vault/advanced/page.tsx',
   'app/vault/advanced/cyber/page.tsx',
   'app/vault/story/page.tsx',
+  'app/vault/spatial/page.tsx',
 ];
 
 const forbidden = [
@@ -87,4 +90,9 @@ for (const feature of ['Storytelling Studio', 'Chapter title', 'Chapter text', '
   assert.ok(story.includes(feature), `Storytelling Studio is missing ${feature}`);
 }
 
-console.log('Data Studio integrity check passed. Publication editor, advanced visualization lab, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
+const spatial = fs.readFileSync('components/data-studio/SpatialVisualLab.tsx', 'utf8');
+for (const feature of ['SPATIAL LAB', 'Hexagon aggregation', 'Grid aggregation', 'Heat surface', 'Density contours', 'Extruded columns', 'Arc / flow map', 'Animated trips', 'Origin lat', 'Destination lat', 'Export SVG']) {
+  assert.ok(spatial.includes(feature), `Spatial Visual Lab is missing ${feature}`);
+}
+
+console.log('Data Studio integrity check passed. Publication editor, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
