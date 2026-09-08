@@ -16,9 +16,6 @@ import './styles/landing-liquid.css';
 import './styles/docbox-polish.css';
 import './styles/glacial-palette.css';
 import './styles/landing-glacial.css';
-import './styles/data-studio.css';
-import './styles/data-studio-v2.css';
-import './styles/data-studio-v3.css';
 import './styles/data-studio-pro.css';
 
 export const metadata: Metadata = {
