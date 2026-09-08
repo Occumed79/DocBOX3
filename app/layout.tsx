@@ -20,6 +20,7 @@ import './styles/data-studio-pro.css';
 import './styles/advanced-visual-lab.css';
 import './styles/storytelling-studio.css';
 import './styles/cyber-visual-lab.css';
+import './styles/spatial-visual-lab.css';
 
 export const metadata: Metadata = {
   title: 'Occu-Med Data Studio',
