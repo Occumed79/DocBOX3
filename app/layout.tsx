@@ -17,6 +17,7 @@ import './styles/docbox-polish.css';
 import './styles/glacial-palette.css';
 import './styles/landing-glacial.css';
 import './styles/data-studio-pro.css';
+import './styles/advanced-visual-lab.css';
 
 export const metadata: Metadata = {
   title: 'Occu-Med Data Studio',
