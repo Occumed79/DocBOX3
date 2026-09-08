@@ -1,5 +1,10 @@
-import DataStudioV2 from '@/components/data-studio/DataStudioV2';
+import DataStudioPro from '@/components/data-studio/DataStudioPro';
 
 export default function VaultPage() {
-  return <DataStudioV2 />;
+  return (
+    <>
+      <DataStudioPro />
+      <a className="advanced-launch" href="/vault/advanced">Advanced Visual Lab ↗</a>
+    </>
+  );
 }
