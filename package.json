@@ -9,9 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "verify:pricing": "node scripts/verify-pricing-integrity.mjs",
-    "verify:public-sources": "node scripts/public-source-smoke.mjs",
-    "verify:runtime": "node scripts/runtime-source-matrix.mjs"
+    "verify:studio": "node scripts/verify-data-studio.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",

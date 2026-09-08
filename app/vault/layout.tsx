@@ -1,15 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Price Intelligence | Occu-Med',
-  description: 'Self-pay healthcare price intelligence, geographic market exploration, quote comparison, and evidence-based pricing reports.',
+  title: 'Data Studio | Occu-Med',
+  description: 'Spreadsheet cleanup, interactive data visualization, and report production for network and operational analysis.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#e9f1f8',
+  themeColor: '#ffffff',
   colorScheme: 'light',
 };
 
