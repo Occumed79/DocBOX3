@@ -15,6 +15,7 @@ const required = [
   'app/styles/cyber-visual-lab.css',
   'app/styles/spatial-visual-lab.css',
   'app/styles/grid-pivot-lab.css',
+  'app/styles/unified-product.css',
   'app/vault/page.tsx',
   'app/vault/advanced/page.tsx',
   'app/vault/advanced/cyber/page.tsx',
@@ -108,4 +109,9 @@ for (const feature of ['Editable data grid', 'Column filters', 'Grouping', 'Pivo
 }
 assert.doesNotMatch(gridPivot, /wijmo|mescius|NEXT_PUBLIC_WIJMO|cdn\.mescius/i, 'Native Grid & Pivot Lab must not load or reference Wijmo/MESCIUS runtime code.');
 
-console.log('Data Studio integrity check passed. Publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
+const unified = fs.readFileSync('app/styles/unified-product.css', 'utf8');
+for (const selector of ['.dp-app', '.gpl-shell', '.av-app', '.spatial-app', '.st-app']) {
+  assert.ok(unified.includes(selector), `Unified product visual layer must style ${selector}`);
+}
+
+console.log('Data Studio integrity check passed. Publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, unified product styling, accessibility metadata, report output, and pricing removal are all present.');
