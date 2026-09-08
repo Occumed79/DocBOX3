@@ -15,8 +15,9 @@ const required = [
   'app/styles/cyber-visual-lab.css',
   'app/styles/spatial-visual-lab.css',
   'app/styles/grid-pivot-lab.css',
-  'app/styles/unified-product.css',
+  'app/styles/workspace-home.css',
   'app/vault/page.tsx',
+  'app/vault/studio/page.tsx',
   'app/vault/advanced/page.tsx',
   'app/vault/advanced/cyber/page.tsx',
   'app/vault/story/page.tsx',
@@ -46,10 +47,14 @@ for (const path of required) assert.ok(fs.existsSync(path), `Required Data Studi
 for (const path of forbidden) assert.ok(!fs.existsSync(path), `Forbidden legacy/proprietary artifact must be removed: ${path}`);
 
 const page = fs.readFileSync('app/vault/page.tsx', 'utf8');
-assert.match(page, /DataStudioPro/, 'The primary /vault route must render Data Studio Pro.');
-assert.match(page, /Advanced Visual Lab/, 'The primary workspace must link to the Advanced Visual Lab.');
-assert.match(page, /Grid & Pivot Lab/, 'The primary workspace must link to the native Grid & Pivot Lab.');
-assert.doesNotMatch(page, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
+const home = fs.readFileSync('components/data-studio/WorkspaceHome.tsx', 'utf8');
+const studioPage = fs.readFileSync('app/vault/studio/page.tsx', 'utf8');
+assert.match(page, /WorkspaceHome/, 'The primary /vault route must render the workspace launchpad.');
+assert.match(studioPage, /DataStudioPro/, 'The /vault/studio route must render Data Studio Pro.');
+for (const workspace of ['/vault/studio', '/vault/grid', '/vault/advanced', '/vault/spatial', '/vault/story']) {
+  assert.ok(home.includes(workspace), `The workspace launchpad must link to ${workspace}.`);
+}
+assert.doesNotMatch(home, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
 
 const parser = fs.readFileSync('app/api/data/parse/route.ts', 'utf8');
 assert.match(parser, /\.xlsx/, 'Data parser must accept XLSX workbooks.');
@@ -109,9 +114,4 @@ for (const feature of ['Editable data grid', 'Column filters', 'Grouping', 'Pivo
 }
 assert.doesNotMatch(gridPivot, /wijmo|mescius|NEXT_PUBLIC_WIJMO|cdn\.mescius/i, 'Native Grid & Pivot Lab must not load or reference Wijmo/MESCIUS runtime code.');
 
-const unified = fs.readFileSync('app/styles/unified-product.css', 'utf8');
-for (const selector of ['.dp-app', '.gpl-shell', '.av-app', '.spatial-app', '.st-app']) {
-  assert.ok(unified.includes(selector), `Unified product visual layer must style ${selector}`);
-}
-
-console.log('Data Studio integrity check passed. Publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, unified product styling, accessibility metadata, report output, and pricing removal are all present.');
+console.log('Data Studio integrity check passed. Publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
