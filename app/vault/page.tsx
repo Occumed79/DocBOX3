@@ -1,5 +1,5 @@
-import TremorPricingDashboard from '@/components/pricing/TremorPricingDashboard';
+import DataStudio from '@/components/data-studio/DataStudio';
 
 export default function VaultPage() {
-  return <TremorPricingDashboard />;
+  return <DataStudio />;
 }
