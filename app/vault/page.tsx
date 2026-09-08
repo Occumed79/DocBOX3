@@ -1,5 +1,5 @@
-import DataStudioV2 from '@/components/data-studio/DataStudioV2';
+import DataStudioV3 from '@/components/data-studio/DataStudioV3';
 
 export default function VaultPage() {
-  return <DataStudioV2 />;
+  return <DataStudioV3 />;
 }
