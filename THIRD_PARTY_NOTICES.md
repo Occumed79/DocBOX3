@@ -1,10 +1,13 @@
 # Third-Party Notices
 
-## Tremor OSS Dashboard Template
+## TailAdmin Free Next.js Admin Dashboard
 
-The Price Intelligence dashboard layout and interaction structure are adapted from the Tremor open-source dashboard template:
+The Data Studio application shell is adapted from the published TailAdmin free Next.js admin dashboard template:
 
-- Repository: `tremorlabs/template-dashboard-oss`
-- License: Apache License 2.0
+- Repository: `TailAdmin/free-nextjs-admin-dashboard`
+- Copyright: © 2023 TailAdmin
+- License: MIT License
 
-The pricing data model, pricing APIs, market logic, quote analysis, and Occu-Med-specific functionality remain part of this repository.
+The spreadsheet parser, schema editor, visualization builder, chart logic, report builder, and Occu-Med-specific functionality are implemented in this repository.
+
+The MIT license permits use, modification, distribution, and sublicensing provided the copyright and permission notice are retained. The original software is provided without warranty.
