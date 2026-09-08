@@ -1,5 +1,5 @@
-import WijmoWorkbench from '@/components/data-studio/WijmoWorkbench';
+import GridPivotLab from '@/components/data-studio/GridPivotLab';
 
 export default function GridPivotLabPage() {
-  return <WijmoWorkbench />;
+  return <GridPivotLab />;
 }
