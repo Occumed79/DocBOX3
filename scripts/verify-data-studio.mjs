@@ -3,12 +3,14 @@ import fs from 'node:fs';
 
 const required = [
   'app/api/data/parse/route.ts',
+  'components/data-studio/StudioDashboard.tsx',
   'components/data-studio/DataStudioPro.tsx',
   'components/data-studio/AdvancedVisualLab.tsx',
   'components/data-studio/StorytellingStudio.tsx',
   'components/data-studio/SpatialVisualLab.tsx',
   'components/data-studio/GridPivotLab.tsx',
   'lib/data-studio/datawrapper-model.ts',
+  'app/styles/studio-dashboard.css',
   'app/styles/data-studio-pro.css',
   'app/styles/advanced-visual-lab.css',
   'app/styles/storytelling-studio.css',
@@ -17,6 +19,7 @@ const required = [
   'app/styles/grid-pivot-lab.css',
   'app/styles/unified-product.css',
   'app/vault/page.tsx',
+  'app/vault/studio/page.tsx',
   'app/vault/advanced/page.tsx',
   'app/vault/advanced/cyber/page.tsx',
   'app/vault/story/page.tsx',
@@ -46,10 +49,17 @@ for (const path of required) assert.ok(fs.existsSync(path), `Required Data Studi
 for (const path of forbidden) assert.ok(!fs.existsSync(path), `Forbidden legacy/proprietary artifact must be removed: ${path}`);
 
 const page = fs.readFileSync('app/vault/page.tsx', 'utf8');
-assert.match(page, /DataStudioPro/, 'The primary /vault route must render Data Studio Pro.');
-assert.match(page, /Advanced Visual Lab/, 'The primary workspace must link to the Advanced Visual Lab.');
-assert.match(page, /Grid & Pivot Lab/, 'The primary workspace must link to the native Grid & Pivot Lab.');
+assert.match(page, /StudioDashboard/, 'The primary /vault route must render the workspace dashboard, not a marketing hero.');
+assert.doesNotMatch(page, /DataStudioPro/, 'The primary /vault route must not render the publication editor directly.');
 assert.doesNotMatch(page, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
+
+const studioPage = fs.readFileSync('app/vault/studio/page.tsx', 'utf8');
+assert.match(studioPage, /DataStudioPro/, 'The dedicated /vault/studio route must render Data Studio Pro.');
+
+const dashboard = fs.readFileSync('components/data-studio/StudioDashboard.tsx', 'utf8');
+for (const feature of ['Choose a workspace', 'Visualization library', 'Report output', 'Grid & Pivot', 'Advanced Visuals', 'Spatial Lab', 'Story Studio']) {
+  assert.ok(dashboard.includes(feature), `Workspace dashboard is missing expected feature text: ${feature}`);
+}
 
 const parser = fs.readFileSync('app/api/data/parse/route.ts', 'utf8');
 assert.match(parser, /\.xlsx/, 'Data parser must accept XLSX workbooks.');
@@ -114,4 +124,9 @@ for (const selector of ['.dp-app', '.gpl-shell', '.av-app', '.spatial-app', '.st
   assert.ok(unified.includes(selector), `Unified product visual layer must style ${selector}`);
 }
 
-console.log('Data Studio integrity check passed. Publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, unified product styling, accessibility metadata, report output, and pricing removal are all present.');
+const dashboardCss = fs.readFileSync('app/styles/studio-dashboard.css', 'utf8');
+for (const selector of ['.studio-home', '.studio-workspace-grid', '.studio-visual-grid', '.studio-report-list']) {
+  assert.ok(dashboardCss.includes(selector), `Dashboard visual layer must style ${selector}`);
+}
+
+console.log('Data Studio integrity check passed. Workspace dashboard, publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, storytelling mode, unified product styling, accessibility metadata, report output, and pricing removal are all present.');
