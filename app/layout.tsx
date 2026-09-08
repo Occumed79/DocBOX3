@@ -17,10 +17,11 @@ import './styles/docbox-polish.css';
 import './styles/glacial-palette.css';
 import './styles/landing-glacial.css';
 import './styles/data-studio.css';
+import './styles/data-studio-v2.css';
 
 export const metadata: Metadata = {
   title: 'Occu-Med Data Studio',
-  description: 'Upload spreadsheets, edit the data schema, build multiple visualizations, and produce analyst reports.',
+  description: 'Upload spreadsheets, edit the data schema, build charts, maps and visual tables, and produce designed analyst reports.',
 };
 
 export const viewport: Viewport = {
