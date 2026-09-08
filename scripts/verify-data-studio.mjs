@@ -91,7 +91,7 @@ for (const feature of ['Storytelling Studio', 'Chapter title', 'Chapter text', '
 }
 
 const spatial = fs.readFileSync('components/data-studio/SpatialVisualLab.tsx', 'utf8');
-for (const feature of ['Spatial Lab', 'Hexagon aggregation', 'Grid aggregation', 'Heat surface', 'Density contours', 'Extruded columns', 'Arc / flow map', 'Animated trips', 'Origin lat', 'Destination lat', 'Export SVG']) {
+for (const feature of ['SPATIAL LAB', 'Hexagon aggregation', 'Grid aggregation', 'Heat surface', 'Density contours', 'Extruded columns', 'Arc / flow map', 'Animated trips', 'Origin lat', 'Destination lat', 'Export SVG']) {
   assert.ok(spatial.includes(feature), `Spatial Visual Lab is missing ${feature}`);
 }
 
