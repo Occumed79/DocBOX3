@@ -7,14 +7,14 @@ const required = [
   'components/data-studio/AdvancedVisualLab.tsx',
   'components/data-studio/StorytellingStudio.tsx',
   'components/data-studio/SpatialVisualLab.tsx',
-  'components/data-studio/WijmoWorkbench.tsx',
+  'components/data-studio/GridPivotLab.tsx',
   'lib/data-studio/datawrapper-model.ts',
   'app/styles/data-studio-pro.css',
   'app/styles/advanced-visual-lab.css',
   'app/styles/storytelling-studio.css',
   'app/styles/cyber-visual-lab.css',
   'app/styles/spatial-visual-lab.css',
-  'app/styles/wijmo-workbench.css',
+  'app/styles/grid-pivot-lab.css',
   'app/vault/page.tsx',
   'app/vault/advanced/page.tsx',
   'app/vault/advanced/cyber/page.tsx',
@@ -36,15 +36,18 @@ const forbidden = [
   '.github/workflows/pricing-runtime.yml',
   '.github/workflows/public-source-smoke.yml',
   '.github/workflows/deployed-price-terrain-smoke.yml',
+  'components/data-studio/WijmoWorkbench.tsx',
+  'app/styles/wijmo-workbench.css',
+  'docs/WIJMO_INTEGRATION.md',
 ];
 
 for (const path of required) assert.ok(fs.existsSync(path), `Required Data Studio file is missing: ${path}`);
-for (const path of forbidden) assert.ok(!fs.existsSync(path), `Pricing artifact must be removed: ${path}`);
+for (const path of forbidden) assert.ok(!fs.existsSync(path), `Forbidden legacy/proprietary artifact must be removed: ${path}`);
 
 const page = fs.readFileSync('app/vault/page.tsx', 'utf8');
 assert.match(page, /DataStudioPro/, 'The primary /vault route must render Data Studio Pro.');
 assert.match(page, /Advanced Visual Lab/, 'The primary workspace must link to the Advanced Visual Lab.');
-assert.match(page, /Grid & Pivot Lab/, 'The primary workspace must link to the Wijmo Grid & Pivot Lab.');
+assert.match(page, /Grid & Pivot Lab/, 'The primary workspace must link to the native Grid & Pivot Lab.');
 assert.doesNotMatch(page, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
 
 const parser = fs.readFileSync('app/api/data/parse/route.ts', 'utf8');
@@ -99,10 +102,10 @@ for (const feature of ['SPATIAL LAB', 'Hexagon aggregation', 'Grid aggregation',
   assert.ok(spatial.includes(feature), `Spatial Visual Lab is missing ${feature}`);
 }
 
-const wijmo = fs.readFileSync('components/data-studio/WijmoWorkbench.tsx', 'utf8');
-for (const feature of ['FlexGrid', 'FlexGridFilter', 'FlexGridSearch', 'GroupPanel', 'PivotEngine', 'PivotPanel', 'PivotGrid', 'PivotChart', 'showDetailOnDoubleClick', 'Export XLSX', 'NEXT_PUBLIC_WIJMO_LICENSE_KEY']) {
-  assert.ok(wijmo.includes(feature), `Wijmo workbench is missing actual integration feature: ${feature}`);
+const gridPivot = fs.readFileSync('components/data-studio/GridPivotLab.tsx', 'utf8');
+for (const feature of ['Editable data grid', 'Column filters', 'Grouping', 'Pivot tables', 'Drill-down', 'Saved views', 'Analyze current filtered grid view', 'Export pivot CSV', 'Freeze']) {
+  assert.ok(gridPivot.includes(feature), `Native Grid & Pivot Lab is missing ${feature}`);
 }
-assert.match(wijmo, /cdn\.mescius\.com\/wijmo\/5\.latest/, 'Wijmo workbench must load the actual MESCIUS runtime, not a local imitation.');
+assert.doesNotMatch(gridPivot, /wijmo|mescius|NEXT_PUBLIC_WIJMO|cdn\.mescius/i, 'Native Grid & Pivot Lab must not load or reference Wijmo/MESCIUS runtime code.');
 
-console.log('Data Studio integrity check passed. Publication editor, actual Wijmo FlexGrid/OLAP workspace, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
+console.log('Data Studio integrity check passed. Publication editor, native Grid & Pivot Lab, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
