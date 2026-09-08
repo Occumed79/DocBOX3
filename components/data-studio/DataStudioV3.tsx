@@ -72,14 +72,23 @@ export default function DataStudioV3() {
   const effectiveGrid = darkPreview ? theme.darkGridline : theme.gridline;
   const ratio = useMemo(() => contrastRatio(effectiveText, effectiveBackground), [effectiveText, effectiveBackground]);
   const contrastLabel = ratio >= 7 ? 'AAA' : ratio >= 4.5 ? 'AA' : ratio >= 3 ? 'Large text only' : 'Fail';
+  const categorical = [...theme.categorical, ...DEFAULT_THEME.categorical].slice(0, 8);
 
   const style = {
     '--dv-theme-bg': effectiveBackground,
     '--dv-theme-text': effectiveText,
     '--dv-theme-muted': theme.mutedText,
     '--dv-theme-grid': effectiveGrid,
-    '--dv-theme-accent': theme.categorical[0],
-    '--dv-theme-accent-2': theme.categorical[1] || theme.categorical[0],
+    '--dv-theme-accent': categorical[0],
+    '--dv-theme-accent-2': categorical[1],
+    '--dv-theme-c1': categorical[0],
+    '--dv-theme-c2': categorical[1],
+    '--dv-theme-c3': categorical[2],
+    '--dv-theme-c4': categorical[3],
+    '--dv-theme-c5': categorical[4],
+    '--dv-theme-c6': categorical[5],
+    '--dv-theme-c7': categorical[6],
+    '--dv-theme-c8': categorical[7],
     '--dv-theme-font': theme.fontFamily === 'serif'
       ? 'Georgia, Cambria, Times New Roman, serif'
       : theme.fontFamily === 'mono'
@@ -108,7 +117,7 @@ export default function DataStudioV3() {
   }
 
   return (
-    <div className={`dw3-theme-shell ${darkPreview ? 'is-dark-preview' : ''}`} style={style}>
+    <div className={`dw3-theme-shell ${darkPreview ? 'is-dark-preview' : ''} ${theme.lockPalette ? 'palette-locked' : ''}`} style={style}>
       <DataStudioV2 />
 
       <div className="dw3-floating-tools" aria-label="Visualization house style tools">
@@ -158,8 +167,8 @@ export default function DataStudioV3() {
           <section>
             <label>Categorical palette</label>
             <div className="dw3-palette-editor">
-              {theme.categorical.slice(0, 8).map((color, index) => (
-                <input key={`${index}-${color}`} type="color" value={color} onChange={(event) => setTheme((current) => ({ ...current, categorical: current.categorical.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
+              {categorical.map((color, index) => (
+                <input key={`${index}-${color}`} type="color" value={color} onChange={(event) => setTheme((current) => ({ ...current, categorical: categorical.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
               ))}
             </div>
             <label className="dw3-check"><input type="checkbox" checked={theme.lockPalette} onChange={(event) => setTheme((current) => ({ ...current, lockPalette: event.target.checked }))} /> Lock visualizations to this palette</label>
