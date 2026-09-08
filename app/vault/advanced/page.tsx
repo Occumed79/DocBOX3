@@ -5,6 +5,7 @@ export default function AdvancedVisualLabPage() {
     <>
       <AdvancedVisualLab />
       <div className="av-mode-links">
+        <a href="/vault/grid">Grid & Pivot Lab</a>
         <a href="/vault/spatial">Spatial Lab</a>
         <a href="/vault/story">Storytelling Studio</a>
         <a href="/vault/advanced/cyber">Cyberwave preview</a>

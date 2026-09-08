@@ -7,17 +7,20 @@ const required = [
   'components/data-studio/AdvancedVisualLab.tsx',
   'components/data-studio/StorytellingStudio.tsx',
   'components/data-studio/SpatialVisualLab.tsx',
+  'components/data-studio/WijmoWorkbench.tsx',
   'lib/data-studio/datawrapper-model.ts',
   'app/styles/data-studio-pro.css',
   'app/styles/advanced-visual-lab.css',
   'app/styles/storytelling-studio.css',
   'app/styles/cyber-visual-lab.css',
   'app/styles/spatial-visual-lab.css',
+  'app/styles/wijmo-workbench.css',
   'app/vault/page.tsx',
   'app/vault/advanced/page.tsx',
   'app/vault/advanced/cyber/page.tsx',
   'app/vault/story/page.tsx',
   'app/vault/spatial/page.tsx',
+  'app/vault/grid/page.tsx',
 ];
 
 const forbidden = [
@@ -41,6 +44,7 @@ for (const path of forbidden) assert.ok(!fs.existsSync(path), `Pricing artifact 
 const page = fs.readFileSync('app/vault/page.tsx', 'utf8');
 assert.match(page, /DataStudioPro/, 'The primary /vault route must render Data Studio Pro.');
 assert.match(page, /Advanced Visual Lab/, 'The primary workspace must link to the Advanced Visual Lab.');
+assert.match(page, /Grid & Pivot Lab/, 'The primary workspace must link to the Wijmo Grid & Pivot Lab.');
 assert.doesNotMatch(page, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
 
 const parser = fs.readFileSync('app/api/data/parse/route.ts', 'utf8');
@@ -95,4 +99,10 @@ for (const feature of ['SPATIAL LAB', 'Hexagon aggregation', 'Grid aggregation',
   assert.ok(spatial.includes(feature), `Spatial Visual Lab is missing ${feature}`);
 }
 
-console.log('Data Studio integrity check passed. Publication editor, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
+const wijmo = fs.readFileSync('components/data-studio/WijmoWorkbench.tsx', 'utf8');
+for (const feature of ['FlexGrid', 'FlexGridFilter', 'FlexGridSearch', 'GroupPanel', 'PivotEngine', 'PivotPanel', 'PivotGrid', 'PivotChart', 'showDetailOnDoubleClick', 'Export XLSX', 'NEXT_PUBLIC_WIJMO_LICENSE_KEY']) {
+  assert.ok(wijmo.includes(feature), `Wijmo workbench is missing actual integration feature: ${feature}`);
+}
+assert.match(wijmo, /cdn\.mescius\.com\/wijmo\/5\.latest/, 'Wijmo workbench must load the actual MESCIUS runtime, not a local imitation.');
+
+console.log('Data Studio integrity check passed. Publication editor, actual Wijmo FlexGrid/OLAP workspace, advanced visualization lab, deck.gl-inspired spatial layers, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
