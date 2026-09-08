@@ -16,16 +16,11 @@ import './styles/landing-liquid.css';
 import './styles/docbox-polish.css';
 import './styles/glacial-palette.css';
 import './styles/landing-glacial.css';
-import './styles/price-intelligence.css';
-import './styles/price-results.css';
-import './styles/price-report.css';
-import './styles/price-intelligence-v2.css';
-import './styles/price-experience-lab.css';
-import './styles/tremor-pricing.css';
+import './styles/data-studio.css';
 
 export const metadata: Metadata = {
-  title: 'Price Intelligence | Occu-Med',
-  description: 'Self-pay healthcare price intelligence for network sourcing and quote decisions.',
+  title: 'Occu-Med Data Studio',
+  description: 'Upload spreadsheets, edit the data schema, build multiple visualizations, and produce analyst reports.',
 };
 
 export const viewport: Viewport = {
