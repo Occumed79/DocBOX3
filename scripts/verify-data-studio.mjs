@@ -3,11 +3,9 @@ import fs from 'node:fs';
 
 const required = [
   'app/api/data/parse/route.ts',
-  'components/data-studio/DataStudioV2.tsx',
-  'components/data-studio/DataStudioV3.tsx',
+  'components/data-studio/DataStudioPro.tsx',
   'lib/data-studio/datawrapper-model.ts',
-  'app/styles/data-studio-v2.css',
-  'app/styles/data-studio-v3.css',
+  'app/styles/data-studio-pro.css',
   'app/vault/page.tsx',
 ];
 
@@ -30,32 +28,36 @@ for (const path of required) assert.ok(fs.existsSync(path), `Required Data Studi
 for (const path of forbidden) assert.ok(!fs.existsSync(path), `Pricing artifact must be removed: ${path}`);
 
 const page = fs.readFileSync('app/vault/page.tsx', 'utf8');
-assert.match(page, /DataStudioV3/, 'The primary /vault route must render the house-style Data Studio.');
+assert.match(page, /DataStudioPro/, 'The primary /vault route must render Data Studio Pro.');
 assert.doesNotMatch(page, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
 
 const parser = fs.readFileSync('app/api/data/parse/route.ts', 'utf8');
 assert.match(parser, /\.xlsx/, 'Data parser must accept XLSX workbooks.');
 assert.match(parser, /\.csv/, 'Data parser must accept CSV files.');
 
-const studio = fs.readFileSync('components/data-studio/DataStudioV2.tsx', 'utf8');
+const studio = fs.readFileSync('components/data-studio/DataStudioPro.tsx', 'utf8');
 for (const feature of [
   'Use row as headers',
-  'Visualization library',
-  'Locator map',
-  'US state tile map',
-  'Heatmap table',
-  'Mini-chart table',
-  'Dual-axis chart',
-  'Waterfall',
-  'Infographic board',
-  'Process page',
-  'Executive brief',
-  'Export CSV',
-]) assert.ok(studio.includes(feature), `Expanded Data Studio is missing expected feature text: ${feature}`);
+  'Visualization editor',
+  'House style',
+  'Accessibility description',
+  'Source name',
+  'Source URL',
+  'Highlight category',
+  'Responsive visualization',
+  'Locator map view',
+  'Center lon',
+  'Center lat',
+  'Map style',
+  'Compass',
+  'Scale',
+  'Search table',
+  'Export SVG',
+  'Print / Save PDF',
+]) assert.ok(studio.includes(feature), `Data Studio Pro is missing expected feature text: ${feature}`);
 
-const themeEditor = fs.readFileSync('components/data-studio/DataStudioV3.tsx', 'utf8');
-for (const feature of ['House style', 'Categorical palette', 'COLOR CHECK', 'Preview dark-mode equivalents', 'Export current SVG', 'Export theme JSON']) {
-  assert.ok(themeEditor.includes(feature), `Theme editor is missing expected feature text: ${feature}`);
+for (const step of ['describe', 'axes', 'visualize', 'annotate', 'publish']) {
+  assert.ok(studio.includes(`'${step}'`), `Data Studio Pro is missing editor step: ${step}`);
 }
 
 const model = fs.readFileSync('lib/data-studio/datawrapper-model.ts', 'utf8');
@@ -66,4 +68,4 @@ for (const property of ['describe', 'annotate', 'axes', 'visualize', 'publish', 
   assert.ok(model.includes(property), `Datawrapper-inspired property model is missing ${property}`);
 }
 
-console.log('Data Studio integrity check passed. Spreadsheet editing, expanded visualization/report modes, house-style theming, accessibility checking, Datawrapper-inspired property modeling, and pricing removal are all present.');
+console.log('Data Studio Pro integrity check passed. Spreadsheet editing, Datawrapper-style editor steps, chart/map/table families, house-style theming, accessibility metadata, locator controls, report output, and pricing removal are all present.');
