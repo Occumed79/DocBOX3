@@ -4,9 +4,17 @@ import fs from 'node:fs';
 const required = [
   'app/api/data/parse/route.ts',
   'components/data-studio/DataStudioPro.tsx',
+  'components/data-studio/AdvancedVisualLab.tsx',
+  'components/data-studio/StorytellingStudio.tsx',
   'lib/data-studio/datawrapper-model.ts',
   'app/styles/data-studio-pro.css',
+  'app/styles/advanced-visual-lab.css',
+  'app/styles/storytelling-studio.css',
+  'app/styles/cyber-visual-lab.css',
   'app/vault/page.tsx',
+  'app/vault/advanced/page.tsx',
+  'app/vault/advanced/cyber/page.tsx',
+  'app/vault/story/page.tsx',
 ];
 
 const forbidden = [
@@ -29,6 +37,7 @@ for (const path of forbidden) assert.ok(!fs.existsSync(path), `Pricing artifact 
 
 const page = fs.readFileSync('app/vault/page.tsx', 'utf8');
 assert.match(page, /DataStudioPro/, 'The primary /vault route must render Data Studio Pro.');
+assert.match(page, /Advanced Visual Lab/, 'The primary workspace must link to the Advanced Visual Lab.');
 assert.doesNotMatch(page, /Pricing|PriceIntelligence|TremorPricing/, 'The primary /vault route still references pricing.');
 
 const parser = fs.readFileSync('app/api/data/parse/route.ts', 'utf8');
@@ -68,4 +77,14 @@ for (const property of ['describe', 'annotate', 'axes', 'visualize', 'publish', 
   assert.ok(model.includes(property), `Datawrapper-inspired property model is missing ${property}`);
 }
 
-console.log('Data Studio Pro integrity check passed. Spreadsheet editing, Datawrapper-style editor steps, chart/map/table families, house-style theming, accessibility metadata, locator controls, report output, and pricing removal are all present.');
+const advanced = fs.readFileSync('components/data-studio/AdvancedVisualLab.tsx', 'utf8');
+for (const feature of ['Histogram', 'Box plot', 'Bubble chart', 'Beeswarm', 'Funnel', 'Slope chart', 'Treemap', 'Force network', 'Sankey flow', 'Timeline', 'Globe']) {
+  assert.ok(advanced.includes(feature), `Advanced Visual Lab is missing ${feature}`);
+}
+
+const story = fs.readFileSync('components/data-studio/StorytellingStudio.tsx', 'utf8');
+for (const feature of ['Storytelling Studio', 'Chapter title', 'Chapter text', 'Latitude', 'Longitude']) {
+  assert.ok(story.includes(feature), `Storytelling Studio is missing ${feature}`);
+}
+
+console.log('Data Studio integrity check passed. Publication editor, advanced visualization lab, globe/network/statistical visuals, storytelling mode, house-style theming, accessibility metadata, report output, and pricing removal are all present.');
