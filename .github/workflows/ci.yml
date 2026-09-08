@@ -5,7 +5,7 @@ on:
     branches: [main]
   push:
     branches:
-      - feature/self-pay-price-intelligence
+      - pivot-data-visualization
 
 permissions:
   contents: read
@@ -41,8 +41,8 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Verify self-pay pricing integrity
-        run: npm run verify:pricing
+      - name: Verify Data Studio pivot
+        run: npm run verify:studio
 
       - name: Type-check and production build
         run: npm run build
