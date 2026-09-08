@@ -1,13 +1,5 @@
-import DataStudioPro from '@/components/data-studio/DataStudioPro';
+import WorkspaceHome from '@/components/data-studio/WorkspaceHome';
 
 export default function VaultPage() {
-  return (
-    <>
-      <DataStudioPro />
-      <div className="av-mode-links">
-        <a href="/vault/grid">Grid & Pivot Lab</a>
-        <a href="/vault/advanced">Advanced Visual Lab</a>
-      </div>
-    </>
-  );
+  return <WorkspaceHome />;
 }
