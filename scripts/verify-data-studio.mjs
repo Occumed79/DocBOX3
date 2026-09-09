@@ -8,6 +8,7 @@ const required = [
   'components/data-studio/StorytellingStudio.tsx',
   'components/data-studio/SpatialVisualLab.tsx',
   'components/data-studio/GridPivotLab.tsx',
+  'components/data-studio/VaultNav.tsx',
   'lib/data-studio/datawrapper-model.ts',
   'app/styles/data-studio-pro.css',
   'app/styles/advanced-visual-lab.css',
@@ -15,7 +16,10 @@ const required = [
   'app/styles/cyber-visual-lab.css',
   'app/styles/spatial-visual-lab.css',
   'app/styles/grid-pivot-lab.css',
+  'app/styles/unified-product.css',
   'app/styles/workspace-home.css',
+  'app/styles/workbench-redesign.css',
+  'app/vault/layout.tsx',
   'app/vault/page.tsx',
   'app/vault/studio/page.tsx',
   'app/vault/advanced/page.tsx',
@@ -79,6 +83,8 @@ for (const feature of [
   'Search table',
   'Export SVG',
   'Print / Save PDF',
+  'REPORT CANVAS',
+  'ADD ELEMENT',
 ]) assert.ok(studio.includes(feature), `Data Studio Pro is missing expected feature text: ${feature}`);
 
 for (const step of ['describe', 'axes', 'visualize', 'annotate', 'publish']) {
@@ -99,8 +105,9 @@ for (const feature of ['Histogram', 'Box plot', 'Bubble chart', 'Beeswarm', 'Fun
 }
 
 const story = fs.readFileSync('components/data-studio/StorytellingStudio.tsx', 'utf8');
-for (const feature of ['Storytelling Studio', 'Chapter title', 'Chapter text', 'Latitude', 'Longitude']) {
-  assert.ok(story.includes(feature), `Storytelling Studio is missing ${feature}`);
+assert.match(story, /Story(?:telling)? Studio/, 'Story Studio is missing its workspace title.');
+for (const feature of ['Chapter title', 'Chapter text', 'Latitude', 'Longitude', 'IntersectionObserver']) {
+  assert.ok(story.includes(feature), `Story Studio is missing ${feature}`);
 }
 
 const spatial = fs.readFileSync('components/data-studio/SpatialVisualLab.tsx', 'utf8');
