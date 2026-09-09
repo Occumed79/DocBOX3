@@ -1,5 +1,5 @@
-import SpatialVisualLab from '@/components/data-studio/SpatialVisualLab';
+import UnifiedSpatialLab from '@/components/data-studio/UnifiedSpatialLab';
 
 export default function SpatialVisualLabPage() {
-  return <SpatialVisualLab />;
+  return <UnifiedSpatialLab />;
 }
