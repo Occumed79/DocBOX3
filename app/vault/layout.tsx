@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import VaultNav from '@/components/data-studio/VaultNav';
+import { DatasetProvider } from '@/components/data-studio/DatasetContext';
 
 export const metadata: Metadata = {
   title: 'DocBOX3 Data Workbench | Occu-Med',
@@ -16,9 +17,11 @@ export const viewport: Viewport = {
 
 export default function VaultLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="vault-shell">
-      <VaultNav />
-      <div className="vault-stage">{children}</div>
-    </div>
+    <DatasetProvider>
+      <div className="vault-shell">
+        <VaultNav />
+        <div className="vault-stage">{children}</div>
+      </div>
+    </DatasetProvider>
   );
 }
