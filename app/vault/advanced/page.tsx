@@ -1,13 +1,13 @@
-import AdvancedVisualLab from '@/components/data-studio/AdvancedVisualLab';
+import UnifiedAdvancedLab from '@/components/data-studio/UnifiedAdvancedLab';
 
 export default function AdvancedVisualLabPage() {
   return (
     <>
-      <AdvancedVisualLab />
+      <UnifiedAdvancedLab />
       <div className="av-mode-links">
         <a href="/vault/grid">Grid & Pivot Lab</a>
         <a href="/vault/spatial">Spatial Lab</a>
-        <a href="/vault/story">Storytelling Studio</a>
+        <a href="/vault/story">Story Studio</a>
         <a href="/vault/advanced/cyber">Cyberwave preview</a>
       </div>
     </>
