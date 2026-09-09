@@ -40,14 +40,13 @@ export default function VaultNav() {
           return <a key={link.href} className={active ? 'active' : ''} href={link.href}>{link.label}</a>;
         })}
       </nav>
-      {dataset && (
-        <a className="vault-current-dataset" href="/vault/studio" title={`${dataset.workbook.filename} · ${activeSheet?.name ?? 'Sheet'} · ${rowCount.toLocaleString()} rows`}>
-          <span>DATASET</span>
-          <strong>{dataset.workbook.filename}</strong>
-          <small>{activeSheet?.name ?? 'Sheet'} · {rowCount.toLocaleString()} rows</small>
-        </a>
-      )}
       <div className="vault-rail-actions">
+        {dataset && (
+          <a className="vault-current-dataset" href="/vault/studio" title={`${dataset.workbook.filename} · ${activeSheet?.name ?? 'Sheet'} · ${rowCount.toLocaleString()} rows`}>
+            <span>{dataset.workbook.filename}</span>
+            <small>{activeSheet?.name ?? 'Sheet'} · {rowCount.toLocaleString()} rows</small>
+          </a>
+        )}
         <a href="/">DocBOX</a>
         <a className="primary" href="/vault/studio" onClick={() => clearDataset()}>New dataset</a>
       </div>
