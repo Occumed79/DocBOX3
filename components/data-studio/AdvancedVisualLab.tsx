@@ -256,6 +256,7 @@ function SlopeChart({ rows, category, first, second }: { rows: CellValue[][]; ca
 }
 
 function Treemap({ rows, category, measure }: { rows: CellValue[][]; category: Col; measure: Col }) {
+  const [selected,setSelected]=useState<string|null>(null);
   const grouped = new Map<string, number>();
   rows.forEach((row) => {
     const label = text(row[category.index]).trim() || '(blank)';
@@ -285,12 +286,14 @@ function Treemap({ rows, category, measure }: { rows: CellValue[][]; category: C
   });
 
   return (
-    <Svg>
+    <Svg><rect width="1000" height="560" fill="transparent" onClick={()=>setSelected(null)}/>
+      {selected&&<g className="av-breadcrumb"><rect x="40" y="8" width="300" height="25" rx="6"/><text x="52" y="25">All / {selected} · click background to reset</text></g>}
       {boxes.map((box) => (
-        <g key={box.label}>
+        <g key={box.label} className="av-treemap-cell" opacity={selected && selected !== box.label ? 0.22 : 1} onClick={e=>{e.stopPropagation();setSelected(box.label)}}>
           <rect x={box.x} y={box.y} width={box.width} height={box.height} rx="8" opacity={0.35 + 0.55 * (1 - box.index / boxes.length)} />
-          <text x={box.x + 10} y={box.y + 22}>{box.label.slice(0, 20)}</text>
-          <text x={box.x + 10} y={box.y + 42} className="av-small">{format(box.value)}</text>
+          <title>{box.label}: {format(box.value)} ({format(box.value/total*100)}%)</title>
+          {box.width>105&&box.height>48&&<text x={box.x + 10} y={box.y + 22}>{box.label.slice(0, 20)}</text>}
+          {box.height>66&&<text x={box.x + 10} y={box.y + 42} className="av-small">{format(box.value)}</text>}
         </g>
       ))}
     </Svg>
@@ -310,6 +313,7 @@ function buildLinks(rows: CellValue[][], source: Col, target: Col, weight?: Col)
 }
 
 function ForceNetwork({ rows, source, target, weight }: { rows: CellValue[][]; source: Col; target: Col; weight?: Col }) {
+  const [hovered,setHovered]=useState<string|null>(null),[selected,setSelected]=useState<string|null>(null);
   const links = buildLinks(rows, source, target, weight);
   if (!links.length) return <EmptyVisual />;
 
@@ -327,17 +331,19 @@ function ForceNetwork({ rows, source, target, weight }: { rows: CellValue[][]; s
     degree.set(link.target, (degree.get(link.target) ?? 0) + 1);
   });
 
+  const focus=selected||hovered,connected=new Set(focus?links.flatMap(link=>link.source===focus?[link.target]:link.target===focus?[link.source]:[]):[]);if(focus)connected.add(focus);
   return (
-    <Svg>
+    <Svg><rect width="1000" height="560" fill="transparent" onClick={()=>setSelected(null)}/>
       {links.map((link) => {
         const a = positions[indexByName.get(link.source) ?? 0];
         const b = positions[indexByName.get(link.target) ?? 0];
         if (!a || !b) return null;
-        return <line key={link.index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="av-thin" strokeWidth={0.5 + (4 * link.weight) / maxWeight} opacity=".18" />;
+        const related=!focus||link.source===focus||link.target===focus;return <line key={link.index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="av-thin av-flow" strokeWidth={0.5 + (4 * link.weight) / maxWeight} opacity={related ? .62 : .035}><title>{link.source} → {link.target}: {format(link.weight)}</title></line>;
       })}
       {positions.map((position) => (
-        <g key={position.name}>
+        <g key={position.name} className="av-node" opacity={!focus||connected.has(position.name)?1:.12} onMouseEnter={()=>setHovered(position.name)} onMouseLeave={()=>setHovered(null)} onClick={e=>{e.stopPropagation();setSelected(position.name)}}>
           <circle cx={position.x} cy={position.y} r={7 + Math.min(12, degree.get(position.name) ?? 0)} />
+          <title>{position.name} · {degree.get(position.name)??0} connections</title>
           <text x={position.x + 12} y={position.y + 4}>{position.name.slice(0, 16)}</text>
         </g>
       ))}
@@ -346,6 +352,7 @@ function ForceNetwork({ rows, source, target, weight }: { rows: CellValue[][]; s
 }
 
 function SankeyFlow({ rows, source, target, weight }: { rows: CellValue[][]; source: Col; target: Col; weight?: Col }) {
+  const [focus,setFocus]=useState<string|null>(null);
   const links = buildLinks(rows, source, target, weight);
   if (!links.length) return <EmptyVisual />;
 
@@ -356,7 +363,7 @@ function SankeyFlow({ rows, source, target, weight }: { rows: CellValue[][]; sou
   const maxWeight = Math.max(...links.map((link) => link.weight), 1);
 
   return (
-    <Svg>
+    <Svg><rect width="1000" height="560" fill="transparent" onClick={()=>setFocus(null)}/>
       {links.map((link) => {
         const y1 = leftY.get(link.source);
         const y2 = rightY.get(link.target);
@@ -367,26 +374,27 @@ function SankeyFlow({ rows, source, target, weight }: { rows: CellValue[][]; sou
             d={`M190 ${y1} C420 ${y1}, 580 ${y2}, 810 ${y2}`}
             fill="none"
             strokeWidth={1 + (8 * link.weight) / maxWeight}
-            opacity=".18"
-            className="av-thin"
-          />
+            opacity={!focus||focus.includes(link.source)||focus.includes(link.target) ? .42 : .045}
+            className="av-thin av-flow"
+            onMouseEnter={()=>setFocus(`${link.source}\u0000${link.target}`)} onMouseLeave={()=>setFocus(null)}
+          ><title>{link.source} → {link.target}: {format(link.weight)}</title></path>
         );
       })}
       {leftNames.map((name) => {
         const y = leftY.get(name) ?? 0;
         return (
-          <g key={`left-${name}`}>
+          <g key={`left-${name}`} className="av-node" opacity={!focus||focus.includes(name)?1:.18} onClick={e=>{e.stopPropagation();setFocus(name)}}>
             <circle cx="180" cy={y} r="7" />
-            <text x="165" y={y + 4} textAnchor="end">{name.slice(0, 18)}</text>
+            <text x="165" y={y + 4} textAnchor="end">{name.slice(0, 18)}</text><title>{name}: {format(links.filter(l=>l.source===name).reduce((a,b)=>a+b.weight,0))}</title>
           </g>
         );
       })}
       {rightNames.map((name) => {
         const y = rightY.get(name) ?? 0;
         return (
-          <g key={`right-${name}`}>
+          <g key={`right-${name}`} className="av-node" opacity={!focus||focus.includes(name)?1:.18} onClick={e=>{e.stopPropagation();setFocus(name)}}>
             <circle cx="820" cy={y} r="7" />
-            <text x="835" y={y + 4}>{name.slice(0, 18)}</text>
+            <text x="835" y={y + 4}>{name.slice(0, 18)}</text><title>{name}: {format(links.filter(l=>l.target===name).reduce((a,b)=>a+b.weight,0))}</title>
           </g>
         );
       })}
@@ -549,6 +557,8 @@ export default function AdvancedVisualLab() {
   }
 
   const families = [...new Set(VISUALS.map((visualDefinition) => visualDefinition.family))];
+  const mappingLabels:Record<VisualType,[string,string?,string?]>={histogram:['Value'],box:['Group','Value'],beeswarm:['Value','Group','Size'],bubble:['X axis','Y axis','Bubble size'],funnel:['Stage','Value'],slope:['Category','Start value','End value'],treemap:['Hierarchy / label','Size','Color measure'],network:['Source','Target','Edge weight'],sankey:['Source','Target','Flow weight'],timeline:['Date / start','Event label','Importance'],globe:['Latitude','Longitude','Point weight']};
+  const mapping=mappingLabels[visualType];
 
   return (
     <div className="av-app">
@@ -595,15 +605,15 @@ export default function AdvancedVisualLab() {
               <label>Header row<select value={headerRow} onChange={(event) => setHeaderRow(Number(event.target.value))}>
                 {sheetRows.slice(0, 12).map((_, index) => <option key={index} value={index}>Row {index + 1}</option>)}
               </select></label>
-              <label>Primary / category<select value={primary} onChange={(event) => setPrimary(event.target.value)}>
+              <label>{mapping[0]}<select value={primary} onChange={(event) => setPrimary(event.target.value)}>
                 <option value="">Choose column</option>{columns.map((column) => <option key={column.index} value={column.index}>{column.name}{column.numeric ? ' · #' : ''}</option>)}
               </select></label>
-              <label>Secondary<select value={secondary} onChange={(event) => setSecondary(event.target.value)}>
+              {mapping[1]&&<label>{mapping[1]}<select value={secondary} onChange={(event) => setSecondary(event.target.value)}>
                 <option value="">Choose column</option>{columns.map((column) => <option key={column.index} value={column.index}>{column.name}{column.numeric ? ' · #' : ''}</option>)}
-              </select></label>
-              <label>Third / weight<select value={third} onChange={(event) => setThird(event.target.value)}>
+              </select></label>}
+              {mapping[2]&&<label>{mapping[2]}<select value={third} onChange={(event) => setThird(event.target.value)}>
                 <option value="">Optional</option>{columns.map((column) => <option key={column.index} value={column.index}>{column.name}{column.numeric ? ' · #' : ''}</option>)}
-              </select></label>
+              </select></label>}
               {visualType === 'globe' && <label>Rotate globe<input type="range" min="-180" max="180" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} /></label>}
             </div>
             <section className="av-stage">{visual}</section>
