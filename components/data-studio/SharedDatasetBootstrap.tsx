@@ -27,19 +27,13 @@ export default function SharedDatasetBootstrap() {
 
   useEffect(() => {
     if (!dataset || pathname === '/vault') return;
-
-    let cancelled = false;
-    let attempts = 0;
     const marker = `${dataset.updatedAt}:${pathname}`;
 
-    const inject = () => {
-      if (cancelled) return;
+    const timer = window.setTimeout(() => {
       const input = document.querySelector<HTMLInputElement>('.vault-stage input[type="file"]');
-      if (!input) {
-        if (attempts++ < 30) window.setTimeout(inject, 50);
-        return;
-      }
-      if (input.dataset.sharedDatasetMarker === marker) return;
+      if (!input || input.dataset.sharedDatasetMarker === marker) return;
+      const currentFile = input.files?.[0];
+      if (currentFile && currentFile.type !== SHARED_MIME) return;
       try {
         const csv = makeSharedCsv(dataset);
         const safeBase = dataset.workbook.filename.replace(/\.[^.]+$/, '').replace(/[^a-z0-9._-]+/gi, '-');
@@ -52,13 +46,9 @@ export default function SharedDatasetBootstrap() {
       } catch {
         // A workspace can still use its normal upload flow if browser File APIs are restricted.
       }
-    };
+    }, 0);
 
-    const timer = window.setTimeout(inject, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
+    return () => window.clearTimeout(timer);
   }, [dataset, pathname]);
 
   return null;
