@@ -43,8 +43,7 @@ export default function VaultNav() {
       <div className="vault-rail-actions">
         {dataset && (
           <a className="vault-current-dataset" href="/vault/studio" title={`${dataset.workbook.filename} · ${activeSheet?.name ?? 'Sheet'} · ${rowCount.toLocaleString()} rows`}>
-            <span>{dataset.workbook.filename}</span>
-            <small>{activeSheet?.name ?? 'Sheet'} · {rowCount.toLocaleString()} rows</small>
+            {dataset.workbook.filename} · {rowCount.toLocaleString()} rows
           </a>
         )}
         <a href="/">DocBOX</a>
