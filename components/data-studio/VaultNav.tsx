@@ -1,0 +1,44 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+
+const links = [
+  { href: '/vault', label: 'Workspace', exact: true },
+  { href: '/vault/studio', label: 'Data Studio' },
+  { href: '/vault/grid', label: 'Grid & Pivot' },
+  { href: '/vault/advanced', label: 'Advanced' },
+  { href: '/vault/spatial', label: 'Spatial' },
+  { href: '/vault/story', label: 'Story' },
+];
+
+function Mark() {
+  return (
+    <svg viewBox="0 0 28 28" aria-hidden="true">
+      <path d="M6 4.5h11.5L22 9v14.5H6z" />
+      <path d="M17.5 4.5V9H22M9.5 13h9M9.5 17h6.5" />
+    </svg>
+  );
+}
+
+export default function VaultNav() {
+  const pathname = usePathname();
+  return (
+    <header className="vault-rail">
+      <a className="vault-rail-brand" href="/vault" aria-label="DocBOX3 workspace home">
+        <span><Mark /></span>
+        <strong>DocBOX<sup>3</sup></strong>
+        <small>Data workbench</small>
+      </a>
+      <nav aria-label="DocBOX3 workspaces">
+        {links.map((link) => {
+          const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
+          return <a key={link.href} className={active ? 'active' : ''} href={link.href}>{link.label}</a>;
+        })}
+      </nav>
+      <div className="vault-rail-actions">
+        <a href="/">DocBOX</a>
+        <a className="primary" href="/vault/studio">New dataset</a>
+      </div>
+    </header>
+  );
+}
