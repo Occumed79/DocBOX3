@@ -3,6 +3,8 @@ import VaultNav from '@/components/data-studio/VaultNav';
 import { DatasetProvider } from '@/components/data-studio/DatasetContext';
 import SharedDatasetBootstrap from '@/components/data-studio/SharedDatasetBootstrap';
 import DataStudioDatasetMirror from '@/components/data-studio/DataStudioDatasetMirror';
+import DataStudioPowerTools from '@/components/data-studio/DataStudioPowerTools';
+import '../styles/functional-power.css';
 
 export const metadata: Metadata = {
   title: 'DocBOX3 Data Workbench | Occu-Med',
@@ -24,6 +26,7 @@ export default function VaultLayout({ children }: Readonly<{ children: React.Rea
         <VaultNav />
         <SharedDatasetBootstrap />
         <DataStudioDatasetMirror />
+        <DataStudioPowerTools />
         <div className="vault-stage">{children}</div>
       </div>
     </DatasetProvider>
