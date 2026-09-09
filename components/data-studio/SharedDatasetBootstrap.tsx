@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDataset } from './DatasetContext';
 
+const SHARED_MIME = 'application/x-docbox3-shared+csv';
+
 function csvCell(value: unknown) {
   const text = value == null ? '' : String(value);
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -24,8 +26,7 @@ export default function SharedDatasetBootstrap() {
   const { dataset } = useDataset();
 
   useEffect(() => {
-    if (!dataset) return;
-    if (pathname === '/vault' || pathname.startsWith('/vault/studio')) return;
+    if (!dataset || pathname === '/vault') return;
 
     let cancelled = false;
     let attempts = 0;
@@ -42,7 +43,7 @@ export default function SharedDatasetBootstrap() {
       try {
         const csv = makeSharedCsv(dataset);
         const safeBase = dataset.workbook.filename.replace(/\.[^.]+$/, '').replace(/[^a-z0-9._-]+/gi, '-');
-        const file = new File([csv], `__docbox3_shared__${safeBase}.csv`, { type: 'text/csv' });
+        const file = new File([csv], `${safeBase}.csv`, { type: SHARED_MIME });
         const transfer = new DataTransfer();
         transfer.items.add(file);
         input.files = transfer.files;
