@@ -6,6 +6,7 @@ import DataStudioDatasetMirror from '@/components/data-studio/DataStudioDatasetM
 import DataStudioPowerToolsGate from '@/components/data-studio/DataStudioPowerToolsGate';
 import '../styles/functional-power.css';
 import '../styles/spatial-functional.css';
+import '../styles/advanced-functional.css';
 
 export const metadata: Metadata = {
   title: 'DocBOX3 Data Workbench | Occu-Med',
