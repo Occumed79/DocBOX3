@@ -5,6 +5,7 @@ import SharedDatasetBootstrap from '@/components/data-studio/SharedDatasetBootst
 import DataStudioDatasetMirror from '@/components/data-studio/DataStudioDatasetMirror';
 import DataStudioPowerToolsGate from '@/components/data-studio/DataStudioPowerToolsGate';
 import '../styles/functional-power.css';
+import '../styles/spatial-functional.css';
 
 export const metadata: Metadata = {
   title: 'DocBOX3 Data Workbench | Occu-Med',
