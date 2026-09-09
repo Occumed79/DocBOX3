@@ -1,18 +1,24 @@
 import type { Metadata, Viewport } from 'next';
+import VaultNav from '@/components/data-studio/VaultNav';
 
 export const metadata: Metadata = {
-  title: 'Data Studio | Occu-Med',
-  description: 'Spreadsheet cleanup, interactive data visualization, and report production for network and operational analysis.',
+  title: 'DocBOX3 Data Workbench | Occu-Med',
+  description: 'Spreadsheet cleanup, interactive data visualization, spatial analysis, and report production for network and operational analysis.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#ffffff',
+  themeColor: '#eef3f8',
   colorScheme: 'light',
 };
 
 export default function VaultLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return (
+    <div className="vault-shell">
+      <VaultNav />
+      <div className="vault-stage">{children}</div>
+    </div>
+  );
 }
