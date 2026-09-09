@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import VaultNav from '@/components/data-studio/VaultNav';
 import { DatasetProvider } from '@/components/data-studio/DatasetContext';
+import SharedDatasetBootstrap from '@/components/data-studio/SharedDatasetBootstrap';
 
 export const metadata: Metadata = {
   title: 'DocBOX3 Data Workbench | Occu-Med',
@@ -20,6 +21,7 @@ export default function VaultLayout({ children }: Readonly<{ children: React.Rea
     <DatasetProvider>
       <div className="vault-shell">
         <VaultNav />
+        <SharedDatasetBootstrap />
         <div className="vault-stage">{children}</div>
       </div>
     </DatasetProvider>
