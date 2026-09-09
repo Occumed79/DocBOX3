@@ -119,8 +119,10 @@ export function DatasetProvider({ children }: { children: React.ReactNode }) {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
         if (response.ok && /\/api\/data\/parse(?:\?|$)/.test(url)) {
           const payload = await response.clone().json() as DatasetWorkbook;
-          const snapshot = snapshotFromWorkbook(payload);
-          if (snapshot) setDataset(snapshot);
+          if (!payload.filename?.startsWith('__docbox3_shared__')) {
+            const snapshot = snapshotFromWorkbook(payload);
+            if (snapshot) setDataset(snapshot);
+          }
         }
       } catch {
         // Parsing the clone is best-effort and must never affect the caller's response.
