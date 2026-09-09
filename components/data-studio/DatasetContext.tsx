@@ -36,6 +36,7 @@ type DatasetContextValue = {
 };
 
 const STORAGE_KEY = 'docbox3-current-dataset-v1';
+const SHARED_MIME = 'application/x-docbox3-shared+csv';
 const DatasetContext = createContext<DatasetContextValue | null>(null);
 
 const cellText = (value: DatasetCell) => value == null ? '' : String(value);
@@ -113,16 +114,17 @@ export function DatasetProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (...args: Parameters<typeof window.fetch>) => {
+      const body = args[1]?.body;
+      const uploaded = body instanceof FormData ? body.get('file') : null;
+      const sharedBootstrap = uploaded instanceof File && uploaded.type === SHARED_MIME;
       const response = await nativeFetch(...args);
       try {
         const input = args[0];
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-        if (response.ok && /\/api\/data\/parse(?:\?|$)/.test(url)) {
+        if (!sharedBootstrap && response.ok && /\/api\/data\/parse(?:\?|$)/.test(url)) {
           const payload = await response.clone().json() as DatasetWorkbook;
-          if (!payload.filename?.startsWith('__docbox3_shared__')) {
-            const snapshot = snapshotFromWorkbook(payload);
-            if (snapshot) setDataset(snapshot);
-          }
+          const snapshot = snapshotFromWorkbook(payload);
+          if (snapshot) setDataset(snapshot);
         }
       } catch {
         // Parsing the clone is best-effort and must never affect the caller's response.
