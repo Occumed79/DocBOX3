@@ -9,6 +9,7 @@ type LayerType = 'scatter' | 'hexagon' | 'grid' | 'heatmap' | 'contour' | 'colum
 type Column = { index: number; name: string; numeric: boolean };
 type Point = { lat: number; lon: number; value: number; label: string; index: number };
 type Flow = { sourceLat: number; sourceLon: number; targetLat: number; targetLon: number; value: number; label: string; index: number };
+type SpatialAggregate = 'count' | 'sum' | 'average';
 
 const LAYERS: Array<{ id: LayerType; name: string; family: string; note: string }> = [
   { id: 'scatter', name: 'Point layer', family: 'Points', note: 'Location signals sized by an optional measure' },
@@ -89,9 +90,10 @@ function Empty() {
 }
 
 function PointLayer({ points, dark }: { points: Point[]; dark: boolean }) {
+  const [selected,setSelected]=useState<number|null>(null);
   if (!points.length) return <Empty />;
   const max = Math.max(1, ...points.map((point) => Math.abs(point.value)));
-  return <WorldFrame dark={dark}>{points.slice(0, 2200).map((point) => { const p = project(point.lon, point.lat); const radius = 3 + Math.sqrt(Math.abs(point.value) / max) * 12; return <g key={point.index}><circle cx={p.x} cy={p.y} r={radius + 6} className="spatial-point-halo"/><circle cx={p.x} cy={p.y} r={radius} className="spatial-point"/></g>; })}</WorldFrame>;
+  return <WorldFrame dark={dark}><rect x="20" y="18" width="960" height="524" rx="24" fill="transparent" onClick={()=>setSelected(null)}/>{points.slice(0, 2200).map((point) => { const p = project(point.lon, point.lat); const radius = 3 + Math.sqrt(Math.abs(point.value) / max) * 12; return <g key={point.index} className="spatial-interactive" opacity={selected===null||selected===point.index?1:.18} onClick={e=>{e.stopPropagation();setSelected(point.index)}}><circle cx={p.x} cy={p.y} r={radius + (selected===point.index?11:6)} className="spatial-point-halo"/><circle cx={p.x} cy={p.y} r={radius} className="spatial-point"/><title>{point.label} · {format(point.value)} · {point.lat.toFixed(4)}, {point.lon.toFixed(4)}</title></g>; })}</WorldFrame>;
 }
 
 function aggregateGrid(points: Point[], cellX: number, cellY: number) {
@@ -109,12 +111,12 @@ function aggregateGrid(points: Point[], cellX: number, cellY: number) {
   return [...buckets.values()];
 }
 
-function GridLayer({ points, dark, columns = false }: { points: Point[]; dark: boolean; columns?: boolean }) {
+function GridLayer({ points, dark, columns = false, aggregate='sum', heightScale=1 }: { points: Point[]; dark: boolean; columns?: boolean; aggregate?:SpatialAggregate; heightScale?:number }) {
   if (!points.length) return <Empty />;
   const cells = aggregateGrid(points, 34, 28);
-  const max = Math.max(1, ...cells.map((cell) => cell.value));
-  return <WorldFrame dark={dark}>{cells.map((cell) => { const x = 40 + cell.gx * 34; const y = 30 + cell.gy * 28; const ratio = cell.value / max; if (columns) { const h = 8 + ratio * 88; return <g key={`${cell.gx}:${cell.gy}`}><polygon points={`${x+4},${y+22} ${x+19},${y+13} ${x+31},${y+20} ${x+16},${y+29}`} className="spatial-column-base"/><polygon points={`${x+4},${y+22-h} ${x+19},${y+13-h} ${x+19},${y+13} ${x+4},${y+22}`} className="spatial-column-side"/><polygon points={`${x+19},${y+13-h} ${x+31},${y+20-h} ${x+31},${y+20} ${x+19},${y+13}`} className="spatial-column-front"/><polygon points={`${x+4},${y+22-h} ${x+19},${y+13-h} ${x+31},${y+20-h} ${x+16},${y+29-h}`} className="spatial-column-top"/></g>; }
-    return <rect key={`${cell.gx}:${cell.gy}`} x={x + 1} y={y + 1} width="32" height="26" rx="3" className="spatial-grid-cell" style={{ opacity: 0.14 + ratio * 0.78 }} />;
+  const metric=(cell:typeof cells[number])=>aggregate==='count'?cell.count:aggregate==='average'?cell.value/cell.count:cell.value;const max = Math.max(1, ...cells.map(metric));
+  return <WorldFrame dark={dark}>{cells.map((cell) => { const x = 40 + cell.gx * 34; const y = 30 + cell.gy * 28; const value=metric(cell),ratio = value / max; if (columns) { const h = (8 + ratio * 88)*heightScale; return <g key={`${cell.gx}:${cell.gy}`} className="spatial-interactive"><title>{cell.count} records · {aggregate}: {format(value)} · sum: {format(cell.value)}</title><polygon points={`${x+4},${y+22} ${x+19},${y+13} ${x+31},${y+20} ${x+16},${y+29}`} className="spatial-column-base"/><polygon points={`${x+4},${y+22-h} ${x+19},${y+13-h} ${x+19},${y+13} ${x+4},${y+22}`} className="spatial-column-side"/><polygon points={`${x+19},${y+13-h} ${x+31},${y+20-h} ${x+31},${y+20} ${x+19},${y+13}`} className="spatial-column-front"/><polygon points={`${x+4},${y+22-h} ${x+19},${y+13-h} ${x+31},${y+20-h} ${x+16},${y+29-h}`} className="spatial-column-top"/></g>; }
+    return <rect key={`${cell.gx}:${cell.gy}`} x={x + 1} y={y + 1} width="32" height="26" rx="3" className="spatial-grid-cell spatial-interactive" style={{ opacity: 0.14 + ratio * 0.78 }}><title>{cell.count} records · {aggregate}: {format(value)} · sum: {format(cell.value)}</title></rect>;
   })}</WorldFrame>;
 }
 
@@ -155,11 +157,11 @@ function ContourLayer({ points, dark }: { points: Point[]; dark: boolean }) {
   return <WorldFrame dark={dark}>{thresholds.map((threshold, ti) => <g key={threshold}>{cells.filter((cell) => cell.value / max >= threshold).map((cell) => { const cx = 40 + cell.gx * 50 + 25; const cy = 30 + cell.gy * 40 + 20; return <ellipse key={`${ti}-${cell.gx}:${cell.gy}`} cx={cx} cy={cy} rx={32 + ti * 6} ry={24 + ti * 5} className="spatial-contour" style={{ opacity: 0.22 + ti * 0.13 }} />; })}</g>)}</WorldFrame>;
 }
 
-function ArcLayer({ flows, dark, animated = false }: { flows: Flow[]; dark: boolean; animated?: boolean }) {
+function ArcLayer({ flows, dark, animated = false, speed=1 }: { flows: Flow[]; dark: boolean; animated?: boolean; speed?:number }) {
   if (!flows.length) return <Empty />;
   const max = Math.max(1, ...flows.map((flow) => Math.abs(flow.value)));
   const shown = flows.slice(0, animated ? 120 : 550);
-  return <WorldFrame dark={dark}><defs>{shown.map((flow) => { const a = project(flow.sourceLon, flow.sourceLat); const b = project(flow.targetLon, flow.targetLat); const lift = Math.max(28, Math.abs(b.x - a.x) * 0.22); return <path key={`path-${flow.index}`} id={`trip-path-${flow.index}`} d={`M${a.x} ${a.y} Q${(a.x+b.x)/2} ${Math.min(a.y,b.y)-lift} ${b.x} ${b.y}`} />; })}</defs>{shown.map((flow) => { const a = project(flow.sourceLon, flow.sourceLat); const b = project(flow.targetLon, flow.targetLat); const lift = Math.max(28, Math.abs(b.x - a.x) * 0.22); const width = 0.7 + Math.sqrt(Math.abs(flow.value) / max) * 4.8; return <g key={flow.index}><path d={`M${a.x} ${a.y} Q${(a.x+b.x)/2} ${Math.min(a.y,b.y)-lift} ${b.x} ${b.y}`} className="spatial-arc" style={{ strokeWidth: width }} /><circle cx={a.x} cy={a.y} r="3.2" className="spatial-origin"/><circle cx={b.x} cy={b.y} r="3.2" className="spatial-target"/></g>; })}{animated && shown.map((flow, index) => <circle key={`moving-${flow.index}`} r={3 + Math.min(4, Math.sqrt(Math.abs(flow.value) / max) * 4)} className="spatial-trip-dot"><animateMotion dur={`${3.5 + (index % 7) * 0.35}s`} repeatCount="indefinite" begin={`${-(index % 11) * 0.27}s`}><mpath href={`#trip-path-${flow.index}`} /></animateMotion></circle>)}</WorldFrame>;
+  return <WorldFrame dark={dark}><defs>{shown.map((flow) => { const a = project(flow.sourceLon, flow.sourceLat); const b = project(flow.targetLon, flow.targetLat); const lift = Math.max(28, Math.abs(b.x - a.x) * 0.22); return <path key={`path-${flow.index}`} id={`trip-path-${flow.index}`} d={`M${a.x} ${a.y} Q${(a.x+b.x)/2} ${Math.min(a.y,b.y)-lift} ${b.x} ${b.y}`} />; })}</defs>{shown.map((flow) => { const a = project(flow.sourceLon, flow.sourceLat); const b = project(flow.targetLon, flow.targetLat); const lift = Math.max(28, Math.abs(b.x - a.x) * 0.22); const width = 0.7 + Math.sqrt(Math.abs(flow.value) / max) * 4.8; return <g key={flow.index} className="spatial-flow spatial-interactive"><path d={`M${a.x} ${a.y} Q${(a.x+b.x)/2} ${Math.min(a.y,b.y)-lift} ${b.x} ${b.y}`} className="spatial-arc" style={{ strokeWidth: width }} /><circle cx={a.x} cy={a.y} r="3.2" className="spatial-origin"/><circle cx={b.x} cy={b.y} r="3.2" className="spatial-target"/><title>{flow.label} · {format(flow.value)} · origin {flow.sourceLat.toFixed(3)}, {flow.sourceLon.toFixed(3)} → destination {flow.targetLat.toFixed(3)}, {flow.targetLon.toFixed(3)}</title></g>; })}{animated && shown.map((flow, index) => <circle key={`moving-${flow.index}`} r={3 + Math.min(4, Math.sqrt(Math.abs(flow.value) / max) * 4)} className="spatial-trip-dot"><animateMotion dur={`${(3.5 + (index % 7) * 0.35)/speed}s`} repeatCount="indefinite" begin={`${-(index % 11) * 0.27}s`}><mpath href={`#trip-path-${flow.index}`} /></animateMotion></circle>)}</WorldFrame>;
 }
 
 export default function SpatialVisualLab() {
@@ -178,6 +180,10 @@ export default function SpatialVisualLab() {
   const [sourceLonIndex, setSourceLonIndex] = useState(-1);
   const [targetLatIndex, setTargetLatIndex] = useState(-1);
   const [targetLonIndex, setTargetLonIndex] = useState(-1);
+  const [aggregation,setAggregation]=useState<SpatialAggregate>('sum');
+  const [heightScale,setHeightScale]=useState(1);
+  const [tripPlaying,setTripPlaying]=useState(true);
+  const [tripSpeed,setTripSpeed]=useState(1);
 
   const sheet = workbook?.sheets[sheetIndex];
   const rows = sheet?.rows ?? [];
@@ -250,12 +256,12 @@ export default function SpatialVisualLab() {
   let visual: React.ReactNode = <Empty />;
   if (layer === 'scatter') visual = <PointLayer points={points} dark={dark}/>;
   if (layer === 'hexagon') visual = <HexLayer points={points} dark={dark}/>;
-  if (layer === 'grid') visual = <GridLayer points={points} dark={dark}/>;
+  if (layer === 'grid') visual = <GridLayer points={points} dark={dark} aggregate={aggregation}/>;
   if (layer === 'heatmap') visual = <HeatLayer points={points} dark={dark}/>;
   if (layer === 'contour') visual = <ContourLayer points={points} dark={dark}/>;
-  if (layer === 'columns') visual = <GridLayer points={points} dark={dark} columns/>;
+  if (layer === 'columns') visual = <GridLayer points={points} dark={dark} columns aggregate={aggregation} heightScale={heightScale}/>;
   if (layer === 'arcs') visual = <ArcLayer flows={flows} dark={dark}/>;
-  if (layer === 'trips') visual = <ArcLayer flows={flows} dark={dark} animated/>;
+  if (layer === 'trips') visual = <ArcLayer flows={flows} dark={dark} animated={tripPlaying} speed={tripSpeed}/>;
 
   function exportSvg() {
     const svg = document.querySelector('.spatial-stage svg');
@@ -283,6 +289,9 @@ export default function SpatialVisualLab() {
           {!isFlow ? <><label><span>Latitude</span><select value={latIndex} onChange={(event) => setLatIndex(Number(event.target.value))}><option value={-1}>Choose field</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label><label><span>Longitude</span><select value={lonIndex} onChange={(event) => setLonIndex(Number(event.target.value))}><option value={-1}>Choose field</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label></> : <><label><span>Origin lat</span><select value={sourceLatIndex} onChange={(event) => setSourceLatIndex(Number(event.target.value))}><option value={-1}>Choose field</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label><label><span>Origin lon</span><select value={sourceLonIndex} onChange={(event) => setSourceLonIndex(Number(event.target.value))}><option value={-1}>Choose field</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label><label><span>Destination lat</span><select value={targetLatIndex} onChange={(event) => setTargetLatIndex(Number(event.target.value))}><option value={-1}>Choose field</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label><label><span>Destination lon</span><select value={targetLonIndex} onChange={(event) => setTargetLonIndex(Number(event.target.value))}><option value={-1}>Choose field</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label></>}
           <label><span>Weight / magnitude</span><select value={valueIndex} onChange={(event) => setValueIndex(Number(event.target.value))}><option value={-1}>Count each row equally</option>{numericColumns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label>
           <label><span>Label</span><select value={labelIndex} onChange={(event) => setLabelIndex(Number(event.target.value))}><option value={-1}>No label field</option>{columns.map((column) => <option key={column.index} value={column.index}>{column.name}</option>)}</select></label>
+          {['grid','columns'].includes(layer)&&<label><span>Cell aggregation</span><select value={aggregation} onChange={event=>setAggregation(event.target.value as SpatialAggregate)}><option value="count">Record count</option><option value="sum">Sum weight</option><option value="average">Average weight</option></select></label>}
+          {layer==='columns'&&<label><span>Height scale · {heightScale.toFixed(1)}×</span><input type="range" min="0.4" max="2.2" step="0.1" value={heightScale} onChange={event=>setHeightScale(Number(event.target.value))}/></label>}
+          {layer==='trips'&&<div className="spatial-playback"><button onClick={()=>setTripPlaying(value=>!value)}>{tripPlaying?'Pause':'Play'}</button><label><span>Speed · {tripSpeed.toFixed(1)}×</span><input type="range" min="0.25" max="3" step="0.25" value={tripSpeed} onChange={event=>setTripSpeed(Number(event.target.value))}/></label></div>}
         </section>
         <section className="spatial-metrics"><div><span>VALID RECORDS</span><strong>{(isFlow ? flows.length : points.length).toLocaleString()}</strong></div><div><span>SOURCE ROWS</span><strong>{dataRows.length.toLocaleString()}</strong></div><div><span>LAYER</span><strong>{selectedLayer.name}</strong></div><div><span>MODE</span><strong>{dark ? 'Midnight' : 'Light'}</strong></div></section>
         <section className="spatial-stage">{visual}</section>
