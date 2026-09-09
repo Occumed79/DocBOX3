@@ -7,12 +7,19 @@ const workspaces = [
 ];
 
 const visuals = [
-  { href: '/vault/studio', title: 'Compare', meta: 'Bars · columns · rankings', kind: 'bars' },
-  { href: '/vault/studio', title: 'Trend', meta: 'Lines · areas · dual axis', kind: 'trend' },
-  { href: '/vault/studio', title: 'Distribution', meta: 'Scatter · dot · range', kind: 'scatter' },
-  { href: '/vault/spatial', title: 'Geography', meta: 'Maps · density · flows', kind: 'map' },
-  { href: '/vault/advanced', title: 'Relationships', meta: 'Sankey · network · hierarchy', kind: 'flow' },
-  { href: '/vault/studio', title: 'Tables', meta: 'Heatmap · mini charts · detail', kind: 'table' },
+  { href: '/vault/studio', title: 'Bar', meta: 'Compare · rank', kind: 'bars' },
+  { href: '/vault/studio', title: 'Column', meta: 'Compare over time', kind: 'column' },
+  { href: '/vault/studio', title: 'Line', meta: 'Trend · change', kind: 'trend' },
+  { href: '/vault/studio', title: 'Area', meta: 'Volume over time', kind: 'area' },
+  { href: '/vault/studio', title: 'Dot plot', meta: 'Precise comparison', kind: 'dots' },
+  { href: '/vault/studio', title: 'Scatter', meta: 'Relationship', kind: 'scatter' },
+  { href: '/vault/studio', title: 'Donut', meta: 'Part to whole', kind: 'donut' },
+  { href: '/vault/studio', title: 'Heat table', meta: 'Pattern in detail', kind: 'table' },
+  { href: '/vault/spatial', title: 'Choropleth', meta: 'Regional pattern', kind: 'map' },
+  { href: '/vault/advanced', title: 'Sankey', meta: 'Weighted flow', kind: 'flow' },
+  { href: '/vault/advanced', title: 'Network', meta: 'Connected systems', kind: 'network' },
+  { href: '/vault/advanced', title: 'Treemap', meta: 'Nested composition', kind: 'treemap' },
+  { href: '/vault/advanced', title: 'Timeline', meta: 'Events in sequence', kind: 'timeline' },
 ];
 
 const templates = [
@@ -41,10 +48,17 @@ function SpreadsheetPreview() {
 }
 
 function VisualPreview({ kind }: { kind: string }) {
+  if (kind === 'column') return <div className="wh-bars columns" aria-hidden="true"><i style={{height:'34%'}}/><i style={{height:'65%'}}/><i style={{height:'82%'}}/><i style={{height:'48%'}}/><i style={{height:'71%'}}/></div>;
   if (kind === 'trend') return <svg className="wh-viz-svg" viewBox="0 0 160 88" aria-hidden="true"><path className="grid" d="M8 18h144M8 44h144M8 70h144"/><path className="line-a" d="M8 66C26 60 31 48 47 52S69 26 88 35s25-4 36-13 18 8 28 3"/><path className="line-b" d="M8 72c17-5 27-4 38-14s24 8 39 2 22-18 36-13 18 7 31-2"/></svg>;
+  if (kind === 'area') return <svg className="wh-viz-svg" viewBox="0 0 160 88" aria-hidden="true"><path className="grid" d="M8 18h144M8 44h144M8 70h144"/><path className="area-fill" d="M8 72V61L32 52l24 8 25-31 25 13 23-24 23 11v43Z"/><path className="line-a" d="M8 61l24-9 24 8 25-31 25 13 23-24 23 11"/></svg>;
+  if (kind === 'dots') return <svg className="wh-viz-svg dots" viewBox="0 0 160 88" aria-hidden="true"><path className="grid" d="M24 15v60M65 15v60M106 15v60M147 15v60"/>{[25,43,59,73].map((y,i)=><g key={y}><line x1="24" x2="147" y1={y} y2={y}/><circle cx={[112,73,132,54][i]} cy={y} r="5"/></g>)}</svg>;
+  if (kind === 'donut') return <div className="wh-donut" aria-hidden="true"><i/><span/><b/></div>;
   if (kind === 'scatter') return <div className="wh-scatter" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div>;
   if (kind === 'map') return <div className="wh-map-preview" aria-hidden="true"><span/><span/><span/><span/><span/><span/><span/><span/><span/><span/><span/><span/></div>;
   if (kind === 'flow') return <svg className="wh-viz-svg flow" viewBox="0 0 160 88" aria-hidden="true"><path d="M16 18C55 18 50 34 82 34s27-18 62-18"/><path d="M16 44c38 0 40-4 66-4s30 25 62 25"/><path d="M16 68c32 0 37-21 66-21s31-4 62-4"/><circle cx="16" cy="18" r="5"/><circle cx="16" cy="44" r="5"/><circle cx="16" cy="68" r="5"/><circle cx="82" cy="34" r="6"/><circle cx="82" cy="47" r="6"/><circle cx="144" cy="16" r="5"/><circle cx="144" cy="43" r="5"/><circle cx="144" cy="65" r="5"/></svg>;
+  if (kind === 'network') return <svg className="wh-viz-svg network" viewBox="0 0 160 88" aria-hidden="true"><path d="M25 22L65 16 91 42 134 20M65 16l-8 48 34-22 41 25M57 64l75 3M91 42l43-22"/>{[[25,22],[65,16],[91,42],[134,20],[57,64],[132,67]].map(([x,y],i)=><circle key={i} cx={x} cy={y} r={i===2?7:5}/>)}</svg>;
+  if (kind === 'treemap') return <div className="wh-treemap" aria-hidden="true"><i/><i/><i/><i/><i/></div>;
+  if (kind === 'timeline') return <div className="wh-timeline" aria-hidden="true"><span/><i/><i/><i/><i/></div>;
   if (kind === 'table') return <div className="wh-table-preview" aria-hidden="true"><b/><b/><b/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div>;
   return <div className="wh-bars" aria-hidden="true"><i style={{ height: '46%' }}/><i style={{ height: '72%' }}/><i style={{ height: '54%' }}/><i style={{ height: '88%' }}/><i style={{ height: '66%' }}/><i style={{ height: '34%' }}/></div>;
 }
