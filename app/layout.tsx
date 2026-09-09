@@ -22,6 +22,7 @@ import './styles/storytelling-studio.css';
 import './styles/cyber-visual-lab.css';
 import './styles/spatial-visual-lab.css';
 import './styles/grid-pivot-lab.css';
+import './styles/unified-product.css';
 import './styles/workspace-home.css';
 
 export const metadata: Metadata = {
