@@ -1,5 +1,5 @@
-import GridPivotLab from '@/components/data-studio/GridPivotLab';
+import UnifiedGridPivotLab from '@/components/data-studio/UnifiedGridPivotLab';
 
 export default function GridPivotLabPage() {
-  return <GridPivotLab />;
+  return <UnifiedGridPivotLab />;
 }
