@@ -24,6 +24,7 @@ import './styles/spatial-visual-lab.css';
 import './styles/grid-pivot-lab.css';
 import './styles/unified-product.css';
 import './styles/workspace-home.css';
+import './styles/workbench-redesign.css';
 
 export const metadata: Metadata = {
   title: 'Occu-Med Data Studio',
